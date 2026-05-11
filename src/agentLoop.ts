@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { runBash } from "./bash.js";
-import { client, MODEL, SYSTEM, TOOLS } from "./config.js";
+import { client, MODEL, SYSTEM } from "./config.js";
+import { getTools, invokeTool } from "./tools/dispatch.js";
 
 export async function agentLoop(
   messages: Anthropic.Messages.MessageParam[],
@@ -8,11 +8,13 @@ export async function agentLoop(
   stopReason: Anthropic.Messages.Message["stop_reason"];
   content: Anthropic.Messages.Message["content"];
 }> {
+  const tools = getTools();
+
   while (true) {
     const response = await client.messages.create({
       model: MODEL as Anthropic.Model,
       system: SYSTEM,
-      tools: TOOLS,
+      tools,
       messages: messages,
       max_tokens: 8000,
     });
@@ -27,29 +29,8 @@ export async function agentLoop(
     }> = [];
     for (const block of response.content) {
       if (block.type === "tool_use") {
-        if (block.name !== "bash") {
-          results.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: `Error: Unsupported tool '${block.name}'. Only 'bash' is allowed.`,
-          });
-          continue;
-        }
-        const input =
-          typeof block.input === "object" && block.input !== null
-            ? (block.input as { command?: unknown })
-            : {};
-        const command = String(input.command ?? "").trim();
-        if (!command) {
-          results.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: "Error: Missing required 'command' for bash tool.",
-          });
-          continue;
-        }
-        console.log(`\x1b[33m$ ${command}\x1b[0m`);
-        const output = await runBash(command);
+        console.log(`\x1b[33mtool: ${block.name}\x1b[0m`);
+        const output = await invokeTool(block.name, block.input);
         console.log(output.slice(0, 200));
         results.push({
           type: "tool_result",

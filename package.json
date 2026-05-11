@@ -2,11 +2,12 @@
   "name": "my-claude-code",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/main.js",
   "type": "module",
   "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "dev": "tsx watch src/main.ts",
-    "build": "rimraf dist && tsc",
+    "build": "pnpm clean && tsc",
     "start": "node dist/main.js"
   },
   "keywords": [],

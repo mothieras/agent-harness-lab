@@ -14,18 +14,4 @@ export const client = new Anthropic({
   ...(baseURL ? { baseURL } : {}),
 });
 
-export const SYSTEM = `You are a coding agent at ${process.cwd()}. Use bash to solve tasks. Act, don't explain.`;
-
-export const TOOLS = [
-  {
-    name: "bash",
-    description: "Run a shell command.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        command: { type: "string" },
-      },
-      required: ["command"],
-    },
-  },
-];
+export const SYSTEM = `You are a coding agent at ${process.cwd()}. Use tools to solve tasks. Act, don't explain.`;

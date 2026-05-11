@@ -30,6 +30,11 @@ function execAsync(
 }
 
 export async function runBash(command: string): Promise<string> {
+  const dangerous = ["rm -rf /", "sudo", "shutdown", "reboot", "> /dev/"];
+  if (dangerous.some((pattern) => command.includes(pattern))) {
+    return "Error: Dangerous command blocked";
+  }
+
   try {
     const r = await execAsync(command, process.cwd(), 120_000);
     const out = (r.stdout + r.stderr).trim();
