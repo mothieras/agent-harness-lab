@@ -8,7 +8,7 @@ export async function runCli(): Promise<void> {
   const history: Anthropic.Messages.MessageParam[] = [];
   try {
     while (true) {
-      const query = await rl.question("\x1b[36ms02 >> \x1b[0m");
+      const query = await rl.question("\x1b[36magent >> \x1b[0m");
       const q = query.trim().toLowerCase();
       if (q === "" || q === "q" || q === "exit") break;
       history.push({ role: "user", content: query });

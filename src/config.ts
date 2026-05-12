@@ -14,4 +14,7 @@ export const client = new Anthropic({
   ...(baseURL ? { baseURL } : {}),
 });
 
-export const SYSTEM = `You are a coding agent at ${process.cwd()}. Use tools to solve tasks. Act, don't explain.`;
+export const SYSTEM = `You are a coding agent at ${process.cwd()}. Use tools to solve tasks. Act, don't explain.
+When a task has multiple steps, use the todo tool to track progress incrementally.
+Do not complete multiple todo items in a single todo update.
+Do not skip pending -> in_progress -> completed transitions.`;
