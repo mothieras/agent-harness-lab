@@ -23,18 +23,11 @@ function requireString(input: ToolInput, key: string): string | null {
   return String(input[key] ?? "");
 }
 
-function optionalLimit(input: ToolInput): number | undefined {
-  if (!hasOwn(input, "limit")) return undefined;
-  const raw = input.limit;
+function optionalInteger(input: ToolInput, key: string): number | undefined {
+  if (!hasOwn(input, key)) return undefined;
+  const raw = input[key];
   if (typeof raw === "number" && Number.isInteger(raw)) return raw;
   return undefined;
-}
-
-function requireItems(input: ToolInput): TodoItemInput[] | null {
-  if (!hasOwn(input, "items")) return null;
-  const raw = input.items;
-  if (!Array.isArray(raw)) return [];
-  return raw as TodoItemInput[];
 }
 
 export class ToolRuntime {
@@ -53,7 +46,7 @@ export class ToolRuntime {
       if (path === null) {
         return "Error: Missing required 'path' for read_file tool.";
       }
-      return runReadFile(path, optionalLimit(input));
+      return runReadFile(path, optionalInteger(input, "limit"));
     },
     write_file: async (input) => {
       const path = requireString(input, "path");
@@ -82,15 +75,33 @@ export class ToolRuntime {
       return runEditFile(path, oldText, newText);
     },
     todo: async (input) => {
-      const items = requireItems(input);
-      if (items === null) {
+      if (!hasOwn(input, "items")) {
         return "Error: Missing required 'items' for todo tool.";
       }
       if (!Array.isArray(input.items)) {
         return "Error: 'items' must be an array for todo tool.";
       }
       try {
-        return this.todoManager.update(items);
+        return this.todoManager.update(input.items as TodoItemInput[]);
+      } catch (error) {
+        return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    },
+    task: async (input) => {
+      const prompt = requireString(input, "prompt");
+      if (!prompt || prompt.trim() === "") {
+        return "Error: Missing required 'prompt' for task tool.";
+      }
+
+      const options: { maxTurns?: number; timeoutMs?: number } = {};
+      const maxTurns = optionalInteger(input, "max_turns");
+      if (maxTurns !== undefined) options.maxTurns = maxTurns;
+      const timeoutMs = optionalInteger(input, "timeout_ms");
+      if (timeoutMs !== undefined) options.timeoutMs = timeoutMs;
+
+      try {
+        const { runSubAgent } = await import("../subagent.js");
+        return await runSubAgent(prompt, options);
       } catch (error) {
         return `Error: ${error instanceof Error ? error.message : String(error)}`;
       }

@@ -69,4 +69,31 @@ export const TOOLS = [
       required: ["items"],
     },
   },
+  {
+    name: "task",
+    description:
+      "Run a subtask in a clean subagent context and return a concise summary. Defaults to 90 turns and 30 minutes.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        prompt: {
+          type: "string",
+          description: "The task for the subagent to complete.",
+        },
+        max_turns: {
+          type: "integer",
+          minimum: 1,
+          description:
+            "Optional maximum number of agent-loop turns for this subagent. Defaults to 90.",
+        },
+        timeout_ms: {
+          type: "integer",
+          minimum: 1,
+          description:
+            "Optional maximum runtime for this subagent in milliseconds. Defaults to 1800000.",
+        },
+      },
+      required: ["prompt"],
+    },
+  },
 ];

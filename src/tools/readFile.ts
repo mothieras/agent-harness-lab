@@ -8,8 +8,7 @@ export async function runReadFile(pathArg: string, limit?: number): Promise<stri
     const text = await readFile(await safePath(pathArg), "utf8");
     let lines = text.split(/\r?\n/);
 
-    // Match Python's `if limit and limit < len(lines)` behavior.
-    if (limit && limit < lines.length) {
+    if (typeof limit === "number" && limit > 0 && limit < lines.length) {
       lines = lines.slice(0, limit).concat(`... (${lines.length - limit} more lines)`);
     }
 
