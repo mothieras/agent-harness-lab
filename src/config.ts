@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import "dotenv/config";
+import { skillLoader } from "./runtime.js";
 
 export const MODEL = process.env.MODEL_ID ?? process.env.ANTHROPIC_MODEL;
 if (!MODEL) throw new Error("MODEL_ID (or ANTHROPIC_MODEL) is required");
@@ -17,4 +18,9 @@ export const client = new Anthropic({
 export const SYSTEM = `You are a coding agent at ${process.cwd()}. Use tools to solve tasks. Act, don't explain.
 When a task has multiple steps, use the todo tool to track progress incrementally.
 Do not complete multiple todo items in a single todo update.
-Do not skip pending -> in_progress -> completed transitions.`;
+Do not skip pending -> in_progress -> completed transitions.
+Use load_skill to access specialized knowledge before tackling unfamiliar topics.
+
+Skills available:
+${skillLoader.getDescriptions()}
+Remember: act, don't explain. Track multi-step work via todo.`;

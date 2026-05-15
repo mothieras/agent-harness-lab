@@ -1,3 +1,4 @@
+import { skillLoader } from "../runtime.js";
 import { runBash } from "./bash.js";
 import { runEditFile } from "./editFile.js";
 import { runReadFile } from "./readFile.js";
@@ -73,6 +74,13 @@ export class ToolRuntime {
         return "Error: Missing required 'new_text' for edit_file tool.";
       }
       return runEditFile(path, oldText, newText);
+    },
+    load_skill: async (input) => {
+      const name = requireString(input, "name");
+      if (!name || name.trim() === "") {
+        return "Error: Missing required 'name' for load_skill tool.";
+      }
+      return `<skill name="${name}">\n${skillLoader.getContent(name)}\n</skill>`;
     },
     todo: async (input) => {
       if (!hasOwn(input, "items")) {

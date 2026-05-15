@@ -17,6 +17,7 @@ const SUB_AGENT_ALLOWED_TOOLS = [
   "write_file",
   "edit_file",
   "todo",
+  "load_skill",
 ];
 
 export async function runSubAgent(

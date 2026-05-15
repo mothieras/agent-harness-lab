@@ -70,6 +70,21 @@ export const TOOLS = [
     },
   },
   {
+    name: "load_skill",
+    description:
+      "Load specialized knowledge by name. Call before tackling unfamiliar topics listed under 'Skills available' in the system prompt.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: {
+          type: "string",
+          description: "Skill name to load (must match one listed in the system prompt).",
+        },
+      },
+      required: ["name"],
+    },
+  },
+  {
     name: "task",
     description:
       "Run a subtask in a clean subagent context and return a concise summary. Defaults to 90 turns and 30 minutes.",
