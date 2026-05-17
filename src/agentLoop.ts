@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { client, MODEL, SYSTEM } from "./config.js";
+import { autoCompactIfNeeded, microCompact } from "./contextCompact.js";
 import { createToolRuntime, getTools } from "./tools/index.js";
 
 export type AgentLoopStopReason =
@@ -123,6 +124,8 @@ export async function agentLoop(
       }
       assertNotTimedOut(deadlineAt);
 
+      microCompact(messages);
+      await withDeadline(autoCompactIfNeeded(messages), deadlineAt);
       turns += 1;
       const response = await withDeadline(
         client.messages.create(
