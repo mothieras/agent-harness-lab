@@ -1,3 +1,11 @@
+## Agent Harness Lab
+
+A TypeScript learning harness for building coding-agent runtime pieces step by step:
+tool loops, local tools, skill loading, subagents, slash commands, and context compaction.
+
+The project is intentionally small so each harness concern stays visible in code instead
+of being hidden behind a framework.
+
 Design Checklist — 
     answer these BEFORE merging:
 

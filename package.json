@@ -1,7 +1,7 @@
 {
-  "name": "my-claude-code",
+  "name": "agent-harness-lab",
   "version": "1.0.0",
-  "description": "",
+  "description": "A TypeScript learning harness for coding-agent loops, tools, skills, subagents, and context compaction.",
   "main": "dist/main.js",
   "type": "module",
   "scripts": {
