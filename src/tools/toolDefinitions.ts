@@ -48,25 +48,56 @@ export const TOOLS = [
     },
   },
   {
-    name: "todo",
-    description: "Update task list. Track progress on multi-step tasks.",
+    name: "task_create",
+    description: "Create a new persistent task. Tasks survive context compression as JSON files.",
     input_schema: {
       type: "object" as const,
       properties: {
-        items: {
+        subject: { type: "string", description: "A brief, actionable title in imperative form." },
+        description: { type: "string", description: "What needs to be done." },
+      },
+      required: ["subject"],
+    },
+  },
+  {
+    name: "task_get",
+    description: "Get full details of a task by ID.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        task_id: { type: "integer", description: "The ID of the task to retrieve." },
+      },
+      required: ["task_id"],
+    },
+  },
+  {
+    name: "task_update",
+    description: "Update a task's status or dependencies. Completing a task auto-removes it from others' blockedBy.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        task_id: { type: "integer", description: "The ID of the task to update." },
+        status: { type: "string", enum: ["pending", "in_progress", "completed"] },
+        addBlockedBy: {
           type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "string" },
-              text: { type: "string" },
-              status: { type: "string", enum: ["pending", "in_progress", "completed"] },
-            },
-            required: ["id", "text", "status"],
-          },
+          items: { type: "integer" },
+          description: "Task IDs that this task depends on.",
+        },
+        removeBlockedBy: {
+          type: "array",
+          items: { type: "integer" },
+          description: "Dependency IDs to remove.",
         },
       },
-      required: ["items"],
+      required: ["task_id"],
+    },
+  },
+  {
+    name: "task_list",
+    description: "List all tasks with status summary and dependency info.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
     },
   },
   {

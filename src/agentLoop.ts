@@ -2,7 +2,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import { client, MODEL, SYSTEM } from "./config.js";
 import { autoCompactIfNeeded, microCompact } from "./contextCompact.js";
 import { createToolRuntime, getTools } from "./tools/index.js";
-
 export type AgentLoopStopReason =
   | Anthropic.Messages.Message["stop_reason"]
   | "max_turns"
@@ -100,7 +99,8 @@ export async function agentLoop(
     positiveIntegerOrUndefined(options?.maxTurns, "maxTurns") ??
     DEFAULT_MAIN_AGENT_MAX_TURNS;
   const timeoutMs = positiveIntegerOrUndefined(options?.timeoutMs, "timeoutMs");
-  const deadlineAt = timeoutMs === undefined ? undefined : Date.now() + timeoutMs;
+  const deadlineAt =
+    timeoutMs === undefined ? undefined : Date.now() + timeoutMs;
   const enableTodoReminder = options?.enableTodoReminder ?? true;
   const allowedTools = options?.allowedTools;
   const tools = allowedTools
@@ -112,6 +112,7 @@ export async function agentLoop(
     content: stopContent(`Stopped: reached timeout (${timeoutMs}ms).`),
   });
   let roundsSinceTodo = 0;
+  let taskToolUsed = false;
   let turns = 0;
 
   try {
@@ -151,7 +152,7 @@ export async function agentLoop(
         | { type: "tool_result"; tool_use_id: string; content: string }
         | { type: "text"; text: string }
       > = [];
-      let usedTodo = false;
+      let usedTaskTool = false;
       for (const block of response.content) {
         if (block.type !== "tool_use") continue;
         assertNotTimedOut(deadlineAt);
@@ -161,12 +162,32 @@ export async function agentLoop(
           deadlineAt,
         );
         console.log(output.slice(0, 200));
-        results.push({ type: "tool_result", tool_use_id: block.id, content: output });
-        if (block.name === "todo") usedTodo = true;
+        results.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: output,
+        });
+        if (block.name === "task_create" || block.name === "task_update") {
+          usedTaskTool = true;
+          taskToolUsed = true;
+        }
       }
-      roundsSinceTodo = usedTodo ? 0 : roundsSinceTodo + 1;
-      if (enableTodoReminder && roundsSinceTodo >= 3) {
-        results.push({ type: "text", text: "<reminder>Update your todos.</reminder>" });
+
+      if (taskToolUsed) {
+        roundsSinceTodo = usedTaskTool ? 0 : roundsSinceTodo + 1;
+
+        if (enableTodoReminder && roundsSinceTodo >= 3) {
+          if (toolRuntime.hasActiveTasks()) {
+            results.push({
+              type: "text", 
+              text: "<reminder>Update your tasks with task_update or task_list.</reminder>",
+            });
+            roundsSinceTodo = 0;
+          } else {
+            roundsSinceTodo = 0;
+            taskToolUsed = false; // all done, stop checking disk
+          }
+        }
       }
       messages.push({ role: "user", content: results });
     }

@@ -1,19 +1,13 @@
+import path from "node:path";
 import { skillLoader } from "../runtime.js";
 import { runBash } from "./bash.js";
 import { runEditFile } from "./editFile.js";
 import { runReadFile } from "./readFile.js";
-import TodoManager from "./todoManager.js";
+import TaskManager from "./taskManager.js";
 import { runWriteFile } from "./writeFile.js";
 
 type ToolInput = Record<string, unknown>;
 type ToolHandler = (input: ToolInput) => Promise<string>;
-type TodoStatus = "pending" | "in_progress" | "completed";
-
-type TodoItemInput = {
-  id: string;
-  text: string;
-  status: TodoStatus;
-};
 
 function hasOwn(input: ToolInput, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(input, key);
@@ -24,15 +18,30 @@ function requireString(input: ToolInput, key: string): string | null {
   return String(input[key] ?? "");
 }
 
-function optionalInteger(input: ToolInput, key: string): number | undefined {
-  if (!hasOwn(input, key)) return undefined;
+function requireInteger(input: ToolInput, key: string): number | null {
+  if (!hasOwn(input, key)) return null;
   const raw = input[key];
   if (typeof raw === "number" && Number.isInteger(raw)) return raw;
-  return undefined;
+  return null;
+}
+
+function optionalInteger(input: ToolInput, key: string): number | undefined {
+  const v = requireInteger(input, key);
+  return v === null ? undefined : v;
+}
+
+function optionalArrayOfIntegers(input: ToolInput, key: string): number[] | undefined {
+  if (!hasOwn(input, key)) return undefined;
+  const raw = input[key];
+  if (!Array.isArray(raw)) return undefined;
+  const result = raw.filter((v) => typeof v === "number" && Number.isInteger(v)) as number[];
+  return result;
 }
 
 export class ToolRuntime {
-  private readonly todoManager = new TodoManager();
+  private readonly taskManager = new TaskManager(
+    path.join(process.cwd(), ".tasks"),
+  );
 
   private readonly handlers: Record<string, ToolHandler> = {
     bash: async (input) => {
@@ -43,26 +52,26 @@ export class ToolRuntime {
       return runBash(command);
     },
     read_file: async (input) => {
-      const path = requireString(input, "path");
-      if (path === null) {
+      const filepath = requireString(input, "path");
+      if (filepath === null) {
         return "Error: Missing required 'path' for read_file tool.";
       }
-      return runReadFile(path, optionalInteger(input, "limit"));
+      return runReadFile(filepath, optionalInteger(input, "limit"));
     },
     write_file: async (input) => {
-      const path = requireString(input, "path");
-      if (path === null) {
+      const filepath = requireString(input, "path");
+      if (filepath === null) {
         return "Error: Missing required 'path' for write_file tool.";
       }
       const content = requireString(input, "content");
       if (content === null) {
         return "Error: Missing required 'content' for write_file tool.";
       }
-      return runWriteFile(path, content);
+      return runWriteFile(filepath, content);
     },
     edit_file: async (input) => {
-      const path = requireString(input, "path");
-      if (path === null) {
+      const filepath = requireString(input, "path");
+      if (filepath === null) {
         return "Error: Missing required 'path' for edit_file tool.";
       }
       const oldText = requireString(input, "old_text");
@@ -73,7 +82,7 @@ export class ToolRuntime {
       if (newText === null) {
         return "Error: Missing required 'new_text' for edit_file tool.";
       }
-      return runEditFile(path, oldText, newText);
+      return runEditFile(filepath, oldText, newText);
     },
     load_skill: async (input) => {
       const name = requireString(input, "name");
@@ -82,18 +91,46 @@ export class ToolRuntime {
       }
       return `<skill name="${name}">\n${skillLoader.getContent(name)}\n</skill>`;
     },
-    todo: async (input) => {
-      if (!hasOwn(input, "items")) {
-        return "Error: Missing required 'items' for todo tool.";
-      }
-      if (!Array.isArray(input.items)) {
-        return "Error: 'items' must be an array for todo tool.";
+    task_create: async (input) => {
+      const subject = requireString(input, "subject");
+      if (!subject || subject.trim() === "") {
+        return "Error: Missing required 'subject' for task_create.";
       }
       try {
-        return this.todoManager.update(input.items as TodoItemInput[]);
+        return this.taskManager.create(subject, requireString(input, "description") ?? "");
       } catch (error) {
         return `Error: ${error instanceof Error ? error.message : String(error)}`;
       }
+    },
+    task_get: async (input) => {
+      const taskId = requireInteger(input, "task_id");
+      if (taskId === null) {
+        return "Error: Missing required 'task_id' for task_get.";
+      }
+      try {
+        return this.taskManager.get(taskId);
+      } catch (error) {
+        return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    },
+    task_update: async (input) => {
+      const taskId = requireInteger(input, "task_id");
+      if (taskId === null) {
+        return "Error: Missing required 'task_id' for task_update.";
+      }
+      try {
+        return this.taskManager.update(
+          taskId,
+          requireString(input, "status") ?? undefined,
+          optionalArrayOfIntegers(input, "addBlockedBy"),
+          optionalArrayOfIntegers(input, "removeBlockedBy"),
+        );
+      } catch (error) {
+        return `Error: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    },
+    task_list: async () => {
+      return this.taskManager.listAll();
     },
     task: async (input) => {
       const prompt = requireString(input, "prompt");
@@ -102,10 +139,10 @@ export class ToolRuntime {
       }
 
       const options: { maxTurns?: number; timeoutMs?: number } = {};
-      const maxTurns = optionalInteger(input, "max_turns");
-      if (maxTurns !== undefined) options.maxTurns = maxTurns;
-      const timeoutMs = optionalInteger(input, "timeout_ms");
-      if (timeoutMs !== undefined) options.timeoutMs = timeoutMs;
+      const mt = optionalInteger(input, "max_turns");
+      if (mt !== undefined) options.maxTurns = mt;
+      const to = optionalInteger(input, "timeout_ms");
+      if (to !== undefined) options.timeoutMs = to;
 
       try {
         const { runSubAgent } = await import("../subagent.js");
@@ -115,6 +152,10 @@ export class ToolRuntime {
       }
     },
   };
+
+  hasActiveTasks(): boolean {
+    return this.taskManager.hasActive();
+  }
 
   async invokeTool(name: string, input: unknown): Promise<string> {
     const handler = this.handlers[name];
