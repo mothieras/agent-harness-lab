@@ -5,7 +5,7 @@ tool loops, local tools, skill loading, subagents, slash commands, context compa
 persistent task tracking with dependency graphs, background task execution with auto-wake,
 and a DI container (AppContext) for service lifecycle management.
 
-Based on the Python agent tutorial series by [Anthropic](https://github.com/anthropics/anthropic-cookbook)
+Based on the Python agent tutorial series at [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)
 — each chapter (S02–S08) maps to a lesson, reimplemented in TypeScript.
 Learning notes are in `note/`.
 
