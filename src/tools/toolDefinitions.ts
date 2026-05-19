@@ -116,6 +116,29 @@ export const TOOLS = [
     },
   },
   {
+    name: "background_run",
+    description:
+      "Run a shell command in the background. Returns task_id immediately — use check_background to poll for results.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        command: { type: "string", description: "The shell command to run." },
+      },
+      required: ["command"],
+    },
+  },
+  {
+    name: "check_background",
+    description:
+      "Check background task status. Omit task_id to list all active tasks.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        task_id: { type: "string", description: "Optional task ID to check." },
+      },
+    },
+  },
+  {
     name: "task",
     description:
       "Run a subtask in a clean subagent context and return a concise summary. Defaults to 90 turns and 30 minutes.",

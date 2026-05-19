@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 interface Task {
@@ -10,7 +10,7 @@ interface Task {
   owner: string;
 }
 
-export default class TaskManager {
+export class TaskManager {
   private readonly dir: string;
   private nextId: number;
 
@@ -18,26 +18,15 @@ export default class TaskManager {
     this.dir = tasksDir;
     if (!existsSync(this.dir)) {
       mkdirSync(this.dir, { recursive: true });
-    }
-    this.nextId = this.maxId() + 1;
-  }
-
-  private maxId(): number {
-    let max = 0;
-    let entries: string[];
-    try {
-      entries = readdirSync(this.dir);
-    } catch {
-      return 0;
-    }
-    for (const f of entries) {
-      const m = f.match(/^task_(\d+)\.json$/);
-      if (m && m[1]) {
-        const id = parseInt(m[1], 10);
-        if (id > max) max = id;
+    } else {
+      // Clean up completed tasks from previous sessions
+      for (const f of readdirSync(this.dir)) {
+        if (f.startsWith("task_") && f.endsWith(".json")) {
+          rmSync(path.join(this.dir, f));
+        }
       }
     }
-    return max;
+    this.nextId = 1;
   }
 
   private load(taskId: number): Task {

@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { formatError } from "./formatError.js";
 import { safePath } from "./safePath.js";
 
 const MAX_OUTPUT_CHARS = 50_000;
@@ -14,7 +15,6 @@ export async function runReadFile(pathArg: string, limit?: number): Promise<stri
 
     return lines.join("\n").slice(0, MAX_OUTPUT_CHARS);
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return `Error: ${message}`;
+    return formatError(e);
   }
 }

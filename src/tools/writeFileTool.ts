@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { formatError } from "./formatError.js";
 import { safePath } from "./safePath.js";
 
 export async function runWriteFile(pathArg: string, content: string): Promise<string> {
@@ -10,7 +11,6 @@ export async function runWriteFile(pathArg: string, content: string): Promise<st
     await writeFile(filePath, content, "utf8");
     return `Wrote ${content.length} bytes to ${pathArg}`;
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return `Error: ${message}`;
+    return formatError(e);
   }
 }

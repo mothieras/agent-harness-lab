@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentLoopStopReason } from "./agentLoop.js";
 
-export function textFromContent(
+function textFromContent(
   content: Anthropic.Messages.Message["content"],
 ): string {
   const parts: string[] = [];

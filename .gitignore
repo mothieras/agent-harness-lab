@@ -4,5 +4,5 @@ dist/
 *.log
 .DS_Store
 .tasks/
-.CLAUDE.md
+CLAUDE.md
 .claude

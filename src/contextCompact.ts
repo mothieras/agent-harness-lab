@@ -60,7 +60,7 @@ export function microCompact(
   }
 }
 
-export function estimateTokens(
+function estimateTokens(
   messages: Anthropic.Messages.MessageParam[],
 ): number {
   return Math.ceil(JSON.stringify(messages).length / 4);

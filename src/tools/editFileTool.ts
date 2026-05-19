@@ -1,4 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { formatError } from "./formatError.js";
 import { safePath } from "./safePath.js";
 
 export async function runEditFile(
@@ -15,7 +16,6 @@ export async function runEditFile(
     await writeFile(filePath, content.replace(oldText, newText), "utf8");
     return `Edited ${pathArg}`;
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return `Error: ${message}`;
+    return formatError(e);
   }
 }

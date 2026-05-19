@@ -1,10 +1,12 @@
 import path from "node:path";
-import { skillLoader } from "../runtime.js";
-import { runBash } from "./bash.js";
-import { runEditFile } from "./editFile.js";
-import { runReadFile } from "./readFile.js";
-import TaskManager from "./taskManager.js";
-import { runWriteFile } from "./writeFile.js";
+import type { SkillLoader } from "../skills/skillLoader.js";
+import { BackgroundManager } from "./backgroundManager.js";
+import { runBash } from "./bashTool.js";
+import { runEditFile } from "./editFileTool.js";
+import { formatError } from "./formatError.js";
+import { runReadFile } from "./readFileTool.js";
+import { TaskManager } from "./taskManager.js";
+import { runWriteFile } from "./writeFileTool.js";
 
 type ToolInput = Record<string, unknown>;
 type ToolHandler = (input: ToolInput) => Promise<string>;
@@ -42,6 +44,12 @@ export class ToolRuntime {
   private readonly taskManager = new TaskManager(
     path.join(process.cwd(), ".tasks"),
   );
+  private readonly bg = new BackgroundManager();
+  private readonly skillLoader: SkillLoader;
+
+  constructor(skillLoader: SkillLoader) {
+    this.skillLoader = skillLoader;
+  }
 
   private readonly handlers: Record<string, ToolHandler> = {
     bash: async (input) => {
@@ -89,7 +97,7 @@ export class ToolRuntime {
       if (!name || name.trim() === "") {
         return "Error: Missing required 'name' for load_skill tool.";
       }
-      return `<skill name="${name}">\n${skillLoader.getContent(name)}\n</skill>`;
+      return `<skill name="${name}">\n${this.skillLoader.getContent(name)}\n</skill>`;
     },
     task_create: async (input) => {
       const subject = requireString(input, "subject");
@@ -99,7 +107,7 @@ export class ToolRuntime {
       try {
         return this.taskManager.create(subject, requireString(input, "description") ?? "");
       } catch (error) {
-        return `Error: ${error instanceof Error ? error.message : String(error)}`;
+        return formatError(error);
       }
     },
     task_get: async (input) => {
@@ -110,7 +118,7 @@ export class ToolRuntime {
       try {
         return this.taskManager.get(taskId);
       } catch (error) {
-        return `Error: ${error instanceof Error ? error.message : String(error)}`;
+        return formatError(error);
       }
     },
     task_update: async (input) => {
@@ -126,35 +134,54 @@ export class ToolRuntime {
           optionalArrayOfIntegers(input, "removeBlockedBy"),
         );
       } catch (error) {
-        return `Error: ${error instanceof Error ? error.message : String(error)}`;
+        return formatError(error);
       }
     },
     task_list: async () => {
       return this.taskManager.listAll();
     },
-    task: async (input) => {
-      const prompt = requireString(input, "prompt");
-      if (!prompt || prompt.trim() === "") {
-        return "Error: Missing required 'prompt' for task tool.";
+    background_run: async (input) => {
+      const command = requireString(input, "command");
+      if (!command || command.trim() === "") {
+        return "Error: Missing required 'command' for background_run.";
       }
-
-      const options: { maxTurns?: number; timeoutMs?: number } = {};
-      const mt = optionalInteger(input, "max_turns");
-      if (mt !== undefined) options.maxTurns = mt;
-      const to = optionalInteger(input, "timeout_ms");
-      if (to !== undefined) options.timeoutMs = to;
-
-      try {
-        const { runSubAgent } = await import("../subagent.js");
-        return await runSubAgent(prompt, options);
-      } catch (error) {
-        return `Error: ${error instanceof Error ? error.message : String(error)}`;
-      }
+      return this.bg.run(command);
+    },
+    check_background: async (input) => {
+      return this.bg.check(requireString(input, "task_id") ?? undefined);
     },
   };
 
   hasActiveTasks(): boolean {
     return this.taskManager.hasActive();
+  }
+
+  taskSummary(): string | null {
+    // For LLM injection — includes descriptions and dependency info.
+    // LLM can call task_get for full detail on a specific task.
+    return this.taskManager.listAll();
+  }
+
+  taskStatusForUser(): string | null {
+    // Compact list with [ ] markers for terminal display
+    const list = this.taskManager.listAll();
+    if (list === "No tasks.") return null;
+    return list;
+  }
+
+  hasRunningBackgroundTasks(): boolean {
+    return this.bg.hasRunning();
+  }
+
+  drainBackgroundNotifications(): string | null {
+    const notifs = this.bg.drainNotifications();
+    if (notifs.length === 0) return null;
+    return notifs
+      .map(
+        (n) =>
+          `[bg:${n.taskId}] ${n.status}: ${n.result}`,
+      )
+      .join("\n");
   }
 
   async invokeTool(name: string, input: unknown): Promise<string> {

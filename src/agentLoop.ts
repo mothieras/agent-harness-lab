@@ -1,16 +1,29 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { client, MODEL, SYSTEM } from "./config.js";
+import { client, MODEL } from "./config.js";
 import { autoCompactIfNeeded, microCompact } from "./contextCompact.js";
-import { createToolRuntime, getTools } from "./tools/index.js";
+import { getTools } from "./tools/index.js";
+import type { ToolRuntime } from "./tools/toolRuntime.js";
+
 export type AgentLoopStopReason =
   | Anthropic.Messages.Message["stop_reason"]
   | "max_turns"
   | "timeout";
+
 export type AgentLoopOptions = {
   maxTurns?: number;
   timeoutMs?: number;
   allowedTools?: string[];
   enableTodoReminder?: boolean;
+  system?: string;
+  onToolResult?: (
+    name: string,
+    input: Record<string, unknown>,
+    output: string,
+  ) => void;
+  runSubAgent?: (
+    prompt: string,
+    options?: { maxTurns?: number; timeoutMs?: number },
+  ) => Promise<string>;
 };
 
 export const DEFAULT_MAIN_AGENT_MAX_TURNS = 200;
@@ -90,6 +103,7 @@ async function withDeadline<T>(
 }
 export async function agentLoop(
   messages: Anthropic.Messages.MessageParam[],
+  toolRuntime: ToolRuntime,
   options?: AgentLoopOptions,
 ): Promise<{
   stopReason: AgentLoopStopReason;
@@ -106,12 +120,15 @@ export async function agentLoop(
   const tools = allowedTools
     ? getTools().filter((t) => allowedTools.includes(t.name))
     : getTools();
-  const toolRuntime = createToolRuntime();
+  const system =
+    options?.system ??
+    `You are a coding agent at ${process.cwd()}. Use tools to solve tasks.`;
   const timedOut = () => ({
     stopReason: "timeout" as const,
     content: stopContent(`Stopped: reached timeout (${timeoutMs}ms).`),
   });
   let roundsSinceTodo = 0;
+  let showTaskStatus = true; // show on first turn, then only after task changes
   let taskToolUsed = false;
   let turns = 0;
 
@@ -128,11 +145,32 @@ export async function agentLoop(
       microCompact(messages);
       await withDeadline(autoCompactIfNeeded(messages), deadlineAt);
       turns += 1;
+
+      // Inject task status when first entering or after a task was modified
+      if (showTaskStatus) {
+        const taskSummary = toolRuntime.taskSummary();
+        if (taskSummary) {
+          messages.push({
+            role: "user",
+            content: `<task-status>\n${taskSummary}\n</task-status>`,
+          });
+        }
+        showTaskStatus = false;
+      }
+
+      const bgNotif = toolRuntime.drainBackgroundNotifications();
+      if (bgNotif) {
+        messages.push({
+          role: "user",
+          content: `<background-results>\n${bgNotif}\n</background-results>`,
+        });
+      }
+
       const response = await withDeadline(
         client.messages.create(
           {
             model: MODEL as Anthropic.Model,
-            system: SYSTEM,
+            system,
             tools,
             messages,
             max_tokens: 8000,
@@ -156,12 +194,41 @@ export async function agentLoop(
       for (const block of response.content) {
         if (block.type !== "tool_use") continue;
         assertNotTimedOut(deadlineAt);
-        console.log(`\x1b[33mtool: ${block.name}\x1b[0m`);
-        const output = await withDeadline(
-          toolRuntime.invokeTool(block.name, block.input),
-          deadlineAt,
+
+        // Handle orchestration-level tools here instead of in toolRuntime
+        let output: string;
+        if (block.name === "task" && options?.runSubAgent) {
+          const input = block.input as Record<string, unknown>;
+          const prompt = String(input.prompt ?? "");
+          if (!prompt.trim()) {
+            output = "Error: Missing required 'prompt' for task tool.";
+          } else {
+            const subOpts: { maxTurns?: number; timeoutMs?: number } = {};
+            const mt = input.max_turns;
+            if (typeof mt === "number" && Number.isInteger(mt)) subOpts.maxTurns = mt;
+            const to = input.timeout_ms;
+            if (typeof to === "number" && Number.isInteger(to)) subOpts.timeoutMs = to;
+            try {
+              output = await withDeadline(
+                options.runSubAgent(prompt, subOpts),
+                deadlineAt,
+              );
+            } catch (error) {
+              output = `Error: ${error instanceof Error ? error.message : String(error)}`;
+            }
+          }
+        } else {
+          output = await withDeadline(
+            toolRuntime.invokeTool(block.name, block.input),
+            deadlineAt,
+          );
+        }
+
+        options?.onToolResult?.(
+          block.name,
+          block.input as Record<string, unknown>,
+          output,
         );
-        console.log(output.slice(0, 200));
         results.push({
           type: "tool_result",
           tool_use_id: block.id,
@@ -170,6 +237,7 @@ export async function agentLoop(
         if (block.name === "task_create" || block.name === "task_update") {
           usedTaskTool = true;
           taskToolUsed = true;
+          showTaskStatus = true; // next turn shows updated task list
         }
       }
 

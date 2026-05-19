@@ -2,7 +2,8 @@
 
 A TypeScript learning harness for building coding-agent runtime pieces step by step:
 tool loops, local tools, skill loading, subagents, slash commands, context compaction,
-and persistent task tracking with dependency graphs.
+persistent task tracking with dependency graphs, background task execution with auto-wake,
+and a DI container (AppContext) for service lifecycle management.
 
 The project is intentionally small so each harness concern stays visible in code instead
 of being hidden behind a framework.
