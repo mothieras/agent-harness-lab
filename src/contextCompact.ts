@@ -154,7 +154,7 @@ function recentMessagesForSummary(
     if (total >= maxChars) break;
   }
 
-  while (selected.length > 0 && hasToolResult(selected[0]!)) {
+  while (selected.length > 1 && hasToolResult(selected[0]!)) {
     selected.shift();
   }
 

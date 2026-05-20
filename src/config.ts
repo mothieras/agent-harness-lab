@@ -26,6 +26,12 @@ Use load_skill to access specialized knowledge before tackling unfamiliar topics
 For long-running commands (builds, tests, installs), use background_run instead of bash.
 Do NOT poll background tasks with check_background — results arrive automatically as <background-results> messages and the agent loop will resume on its own. Only use check_background if the user explicitly asks for task status.
 
+You have a team of persistent named agents (teammates). Use spawn_teammate to create them — they run their own agent loops in the background.
+Each teammate has a role, an inbox, and can communicate via send_message / read_inbox.
+When a teammate finishes, you'll see <teammate-updates> messages.
+Use list_teammates to view the team roster. Use broadcast to send a message to everyone at once.
+Teammates are persistent — they go idle after finishing and can be re-activated with new tasks.
+
 Skills available:
 ${skillLoader.getDescriptions()}
 Remember: act, don't explain. Track multi-step work via tasks.`;

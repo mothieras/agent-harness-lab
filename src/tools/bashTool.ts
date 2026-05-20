@@ -29,20 +29,25 @@ function execAsync(
   });
 }
 
+const DANGEROUS = ["rm -rf /", "sudo", "shutdown", "reboot", "> /dev/"];
+
+export function isDangerousCommand(command: string): boolean {
+  return DANGEROUS.some((pattern) => command.includes(pattern));
+}
+
 export async function runBash(command: string): Promise<string> {
-  const dangerous = ["rm -rf /", "sudo", "shutdown", "reboot", "> /dev/"];
-  if (dangerous.some((pattern) => command.includes(pattern))) {
+  if (isDangerousCommand(command)) {
     return "Error: Dangerous command blocked";
   }
 
   try {
     const r = await execAsync(command, process.cwd(), 120_000);
     const out = (r.stdout + r.stderr).trim();
-    return out ? out.slice(0, 50_000) : "(no output)";
+    return out ? out.slice(-50000) : "(no output)";
   } catch (e) {
     const err = e as ExecErrorWithOutput;
     const out = `${err.stdout ?? ""}${err.stderr ?? ""}`.trim();
-    if (out) return out.slice(0, 50_000);
+    if (out) return out.slice(-50000);
     if (err.code === "ETIMEDOUT") return "Error: Timeout (120s)";
     return `Error: ${err.message}`;
   }

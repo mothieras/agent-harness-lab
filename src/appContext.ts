@@ -1,5 +1,6 @@
 import path from "node:path";
 import { SkillLoader } from "./skills/skillLoader.js";
+import { TeammateManager } from "./team/teammateManager.js";
 import { ToolRuntime } from "./tools/toolRuntime.js";
 
 /**
@@ -10,10 +11,13 @@ import { ToolRuntime } from "./tools/toolRuntime.js";
 export interface AppContext {
   skillLoader: SkillLoader;
   toolRuntime: ToolRuntime;
+  teammateManager: TeammateManager;
 }
 
 export function createAppContext(workspaceRoot: string): AppContext {
   const skillLoader = new SkillLoader(path.join(workspaceRoot, "skills"));
   const toolRuntime = new ToolRuntime(skillLoader);
-  return { skillLoader, toolRuntime };
+  const teammateManager = new TeammateManager(path.join(workspaceRoot, ".team"));
+  toolRuntime.setTeammateManager(teammateManager);
+  return { skillLoader, toolRuntime, teammateManager };
 }

@@ -1,5 +1,7 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
 import type { SkillLoader } from "../skills/skillLoader.js";
+import type { TeammateManager } from "../team/teammateManager.js";
 import { BackgroundManager } from "./backgroundManager.js";
 import { runBash } from "./bashTool.js";
 import { runEditFile } from "./editFileTool.js";
@@ -7,6 +9,8 @@ import { formatError } from "./formatError.js";
 import { runReadFile } from "./readFileTool.js";
 import { TaskManager } from "./taskManager.js";
 import { runWriteFile } from "./writeFileTool.js";
+
+export const agentIdentity = new AsyncLocalStorage<string>();
 
 type ToolInput = Record<string, unknown>;
 type ToolHandler = (input: ToolInput) => Promise<string>;
@@ -17,7 +21,11 @@ function hasOwn(input: ToolInput, key: string): boolean {
 
 function requireString(input: ToolInput, key: string): string | null {
   if (!hasOwn(input, key)) return null;
-  return String(input[key] ?? "");
+  const raw = input[key];
+  if (raw === null || raw === undefined) return "";
+  if (typeof raw === "string") return raw;
+  if (typeof raw === "number") return String(raw);
+  return null;
 }
 
 function requireInteger(input: ToolInput, key: string): number | null {
@@ -46,9 +54,14 @@ export class ToolRuntime {
   );
   private readonly bg = new BackgroundManager();
   private readonly skillLoader: SkillLoader;
+  private teammateManager: TeammateManager | null = null;
 
   constructor(skillLoader: SkillLoader) {
     this.skillLoader = skillLoader;
+  }
+
+  setTeammateManager(tm: TeammateManager): void {
+    this.teammateManager = tm;
   }
 
   private readonly handlers: Record<string, ToolHandler> = {
@@ -149,6 +162,33 @@ export class ToolRuntime {
     },
     check_background: async (input) => {
       return this.bg.check(requireString(input, "task_id") ?? undefined);
+    },
+    list_teammates: async () => {
+      if (!this.teammateManager) return "Error: Team not available.";
+      return this.teammateManager.listAll();
+    },
+    send_message: async (input) => {
+      if (!this.teammateManager) return "Error: Team not available.";
+      const to = requireString(input, "to");
+      if (!to || to.trim() === "") return "Error: Missing required 'to' for send_message.";
+      const content = requireString(input, "content");
+      if (content === null) return "Error: Missing required 'content' for send_message.";
+      const from = agentIdentity.getStore() ?? "lead";
+      return this.teammateManager.send(from, to, content, requireString(input, "msg_type") ?? "message");
+    },
+    read_inbox: async () => {
+      if (!this.teammateManager) return "Error: Team not available.";
+      const name = agentIdentity.getStore() ?? "lead";
+      const msgs = this.teammateManager.drainInbox(name);
+      if (msgs.length === 0) return "Inbox empty.";
+      return JSON.stringify(msgs, null, 2);
+    },
+    broadcast: async (input) => {
+      if (!this.teammateManager) return "Error: Team not available.";
+      const content = requireString(input, "content");
+      if (!content || content.trim() === "") return "Error: Missing required 'content' for broadcast.";
+      const from = agentIdentity.getStore() ?? "lead";
+      return this.teammateManager.broadcast(from, content);
     },
   };
 

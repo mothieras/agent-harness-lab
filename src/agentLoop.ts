@@ -24,6 +24,15 @@ export type AgentLoopOptions = {
     prompt: string,
     options?: { maxTurns?: number; timeoutMs?: number },
   ) => Promise<string>;
+  beforeTurn?: (
+    messages: Anthropic.Messages.MessageParam[],
+  ) => Promise<void>;
+  runTeammate?: (
+    name: string,
+    role: string,
+    prompt: string,
+  ) => string;
+  drainTeammateNotifications?: () => string | null;
 };
 
 export const DEFAULT_MAIN_AGENT_MAX_TURNS = 200;
@@ -166,6 +175,18 @@ export async function agentLoop(
         });
       }
 
+      const teammateNotif = options?.drainTeammateNotifications?.();
+      if (teammateNotif) {
+        messages.push({
+          role: "user",
+          content: `<teammate-updates>\n${teammateNotif}\n</teammate-updates>`,
+        });
+      }
+
+      if (options?.beforeTurn) {
+        await options.beforeTurn(messages);
+      }
+
       const response = await withDeadline(
         client.messages.create(
           {
@@ -216,6 +237,16 @@ export async function agentLoop(
             } catch (error) {
               output = `Error: ${error instanceof Error ? error.message : String(error)}`;
             }
+          }
+        } else if (block.name === "spawn_teammate" && options?.runTeammate) {
+          const input = block.input as Record<string, unknown>;
+          const name = String(input.name ?? "");
+          const role = String(input.role ?? "");
+          const prompt = String(input.prompt ?? "");
+          if (!name.trim() || !role.trim() || !prompt.trim()) {
+            output = "Error: spawn_teammate requires 'name', 'role', and 'prompt'.";
+          } else {
+            output = options.runTeammate(name, role, prompt);
           }
         } else {
           output = await withDeadline(

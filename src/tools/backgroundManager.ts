@@ -1,5 +1,6 @@
 import { exec } from "node:child_process";
 import crypto from "node:crypto";
+import { isDangerousCommand } from "./bashTool.js";
 
 type BgStatus = "running" | "completed" | "timeout" | "error";
 
@@ -21,6 +22,9 @@ export class BackgroundManager {
   private notifications: BgNotification[] = [];
 
   run(command: string): string {
+    if (isDangerousCommand(command)) {
+      return "Error: Dangerous command blocked";
+    }
     const taskId = crypto.randomUUID().slice(0, 8);
     this.tasks.set(taskId, {
       status: "running",
@@ -88,6 +92,11 @@ export class BackgroundManager {
   drainNotifications(): BgNotification[] {
     const notifs = this.notifications.slice();
     this.notifications = [];
+    for (const n of notifs) {
+      if (n.status !== "running") {
+        this.tasks.delete(n.taskId);
+      }
+    }
     return notifs;
   }
 }

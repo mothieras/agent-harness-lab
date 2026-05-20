@@ -165,4 +165,63 @@ export const TOOLS = [
       required: ["prompt"],
     },
   },
+  {
+    name: "spawn_teammate",
+    description:
+      "Spawn a persistent teammate that runs its own agent loop. Teammates have names, roles, and async mailboxes.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: { type: "string", description: "Unique name for the teammate." },
+        role: { type: "string", description: "Role description (e.g. coder, tester)." },
+        prompt: { type: "string", description: "Initial task prompt for the teammate." },
+      },
+      required: ["name", "role", "prompt"],
+    },
+  },
+  {
+    name: "list_teammates",
+    description: "List all teammates with their name, role, and status.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+    },
+  },
+  {
+    name: "send_message",
+    description:
+      "Send a message to a teammate's inbox. They will see it on their next turn.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        to: { type: "string", description: "Recipient teammate name (or 'lead')." },
+        content: { type: "string", description: "Message content." },
+        msg_type: {
+          type: "string",
+          enum: ["message", "broadcast", "shutdown_request", "shutdown_response", "plan_approval_response"],
+          description: "Message type. Defaults to 'message'.",
+        },
+      },
+      required: ["to", "content"],
+    },
+  },
+  {
+    name: "read_inbox",
+    description: "Read and drain your inbox. Returns messages sent to you since last read.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+    },
+  },
+  {
+    name: "broadcast",
+    description: "Send a message to all teammates at once.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        content: { type: "string", description: "Message to broadcast." },
+      },
+      required: ["content"],
+    },
+  },
 ];
