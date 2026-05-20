@@ -3,10 +3,10 @@
 A TypeScript learning harness for building coding-agent runtime pieces step by step:
 tool loops, local tools, skill loading, subagents, slash commands, context compaction,
 persistent task tracking with dependency graphs, background task execution with auto-wake,
-and a DI container (AppContext) for service lifecycle management.
+agent teams with mailbox-based communication, and a DI container (AppContext) for service lifecycle management.
 
 Based on the Python agent tutorial series at [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)
-— each chapter (S02–S08) maps to a lesson, reimplemented in TypeScript.
+— each chapter (S02–S09) maps to a lesson, reimplemented in TypeScript.
 Learning notes are in `note/`.
 
 The project is intentionally small so each harness concern stays visible in code instead
