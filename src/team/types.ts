@@ -22,8 +22,3 @@ export interface TeamMessage {
   content: string;
   timestamp: number;
 }
-
-export interface TeamConfig {
-  team_name: string;
-  members: TeamMember[];
-}

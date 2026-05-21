@@ -99,7 +99,7 @@ function buildTeamOptions(app: AppContext): {
 
 export async function runCli(): Promise<void> {
   const app = createAppContext(process.cwd());
-  const system = buildSystem(app.skillLoader);
+  const system = buildSystem(app.skillLoader, app.memoryManager);
   const teamOptions = buildTeamOptions(app);
 
   const rl = readline.createInterface({ input, output });
@@ -127,6 +127,8 @@ export async function runCli(): Promise<void> {
       console.log(describeFinalResponse(content, stopReason));
       printTaskStatus(app);
       console.log();
+
+      void app.memoryManager.extract(history);
 
       // Auto-wake: if background tasks are still running, wait for them
       while (app.toolRuntime.hasRunningBackgroundTasks()) {
@@ -163,9 +165,15 @@ export async function runCli(): Promise<void> {
         console.log(describeFinalResponse(result.content, result.stopReason));
         printTaskStatus(app);
         console.log();
+
+        void app.memoryManager.extract(history);
       }
     }
   } finally {
+    if (app.memoryManager.list().length >= 10) {
+      await app.memoryManager.consolidate();
+    }
+    app.toolRuntime.clearTasksIfAllDone();
     rl.close();
   }
 }

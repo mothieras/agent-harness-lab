@@ -1,4 +1,4 @@
-# S07: Persistent Task System
+# Persistent Task System
 
 ## 核心概念
 

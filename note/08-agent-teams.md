@@ -1,4 +1,4 @@
-# S09: Agent Teams
+# Agent Teams
 
 ## 核心概念
 

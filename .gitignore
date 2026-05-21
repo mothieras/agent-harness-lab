@@ -6,3 +6,5 @@ dist/
 .tasks/
 .claude
 .team
+.playwright-mcp/
+.memory/

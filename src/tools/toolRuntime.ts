@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
+import type { MemoryManager } from "../memory/memoryManager.js";
+import type { MemoryType } from "../memory/types.js";
 import type { SkillLoader } from "../skills/skillLoader.js";
 import type { TeammateManager } from "../team/teammateManager.js";
 import { BackgroundManager } from "./backgroundManager.js";
@@ -54,10 +56,12 @@ export class ToolRuntime {
   );
   private readonly bg = new BackgroundManager();
   private readonly skillLoader: SkillLoader;
+  private readonly memoryManager: MemoryManager;
   private teammateManager: TeammateManager | null = null;
 
-  constructor(skillLoader: SkillLoader) {
+  constructor(skillLoader: SkillLoader, memoryManager: MemoryManager) {
     this.skillLoader = skillLoader;
+    this.memoryManager = memoryManager;
   }
 
   setTeammateManager(tm: TeammateManager): void {
@@ -190,7 +194,25 @@ export class ToolRuntime {
       const from = agentIdentity.getStore() ?? "lead";
       return this.teammateManager.broadcast(from, content);
     },
+    update_memory: async (input) => {
+      const name = requireString(input, "name");
+      if (!name || name.trim() === "") return "Error: Missing required 'name' for update_memory.";
+      const type = requireString(input, "type") ?? "user";
+      if (!["user", "feedback", "project", "reference"].includes(type)) {
+        return `Error: Invalid type '${type}'. Must be user, feedback, project, or reference.`;
+      }
+      const description = requireString(input, "description");
+      if (!description || description.trim() === "") return "Error: Missing required 'description' for update_memory.";
+      const body = requireString(input, "body");
+      if (!body || body.trim() === "") return "Error: Missing required 'body' for update_memory.";
+      const filename = this.memoryManager.write(name, type as MemoryType, description, body);
+      return `Memory saved: ${filename}`;
+    },
   };
+
+  clearTasksIfAllDone(): boolean {
+    return this.taskManager.clearIfAllCompleted();
+  }
 
   hasActiveTasks(): boolean {
     return this.taskManager.hasActive();

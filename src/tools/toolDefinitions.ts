@@ -224,4 +224,19 @@ export const TOOLS = [
       required: ["content"],
     },
   },
+  {
+    name: "update_memory",
+    description:
+      "Create or update a memory in persistent storage. Memories survive context compaction and session restarts. Use when the user expresses a preference, gives feedback, shares project context, or mentions a useful reference.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: { type: "string", description: "Short kebab-case identifier (e.g. 'user-preference-tabs')." },
+        type: { type: "string", enum: ["user", "feedback", "project", "reference"], description: "Memory type: user (user preference), feedback (guidance), project (project fact), reference (external pointer)." },
+        description: { type: "string", description: "One-line summary for index lookup." },
+        body: { type: "string", description: "Full detail in markdown. Include Why and How to apply sections." },
+      },
+      required: ["name", "type", "description", "body"],
+    },
+  },
 ];

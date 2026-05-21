@@ -1,4 +1,4 @@
-# S08: Background Tasks + Auto-Wake + AppContext
+# Background Tasks + Auto-Wake + AppContext
 
 ## 核心概念
 

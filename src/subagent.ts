@@ -17,10 +17,6 @@ const SUB_AGENT_ALLOWED_TOOLS = [
   "read_file",
   "write_file",
   "edit_file",
-  "task_create",
-  "task_get",
-  "task_update",
-  "task_list",
   "load_skill",
 ];
 

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 interface Task {
@@ -164,5 +164,35 @@ export class TaskManager {
     const done = tasks.filter((t) => t.status === "completed").length;
     lines.push(`\n(${done}/${tasks.length} completed)`);
     return lines.join("\n");
+  }
+
+  clearIfAllCompleted(): boolean {
+    let entries: string[];
+    try {
+      entries = readdirSync(this.dir);
+    } catch {
+      return false;
+    }
+    const taskFiles = entries.filter(
+      (f) => f.startsWith("task_") && f.endsWith(".json"),
+    );
+    if (taskFiles.length === 0) return false;
+
+    let allDone = true;
+    for (const f of taskFiles) {
+      const task = JSON.parse(
+        readFileSync(path.join(this.dir, f), "utf8"),
+      ) as Task;
+      if (task.status !== "completed") {
+        allDone = false;
+        break;
+      }
+    }
+    if (!allDone) return false;
+
+    for (const f of taskFiles) {
+      rmSync(path.join(this.dir, f));
+    }
+    return true;
   }
 }
