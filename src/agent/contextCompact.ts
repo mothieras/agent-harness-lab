@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
-import { client, MODEL } from "./config.js";
+import { client, MODEL } from "../config.js";
 
 const KEEP_RECENT_TOOL_RESULTS = 8;
 const PRESERVE_RESULT_TOOLS = new Set<string>(["read_file"]);

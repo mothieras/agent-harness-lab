@@ -15,40 +15,54 @@ pnpm start            # Run compiled output
 
 This is a minimal coding-agent runtime harness — it builds the core loop (model ↔ tools) from scratch so every piece is visible. It's **not a framework**; it's deliberately thin.
 
-**Entry point:** `src/main.ts` → `src/cli.ts` readline loop → `src/agentLoop.ts`
+**Entry point:** `src/main.ts` → `src/cli/index.ts` readline loop → `src/agent/loop.ts`
 
-**Core loop** (`src/agentLoop.ts`):
+**Core loop** (`src/agent/loop.ts`):
 1. Sends messages to the model with tools
-2. If stop_reason is `tool_use`, executes each tool via `ToolRuntime.invokeTool()`, feeds results back as user messages
-3. Orchestration-level tools (`task`, `spawn_teammate`) are intercepted in the loop itself rather than dispatched to `toolRuntime`
-4. If stop_reason is anything else, returns the final response
-5. Enforces max_turns and timeout; injects task reminders after 3+ rounds without a task update
-6. Subagents use the same `agentLoop()` but with a restricted toolset (no `task` tool), fewer turns, and no todo reminders
-7. Teammates also reuse `agentLoop()` via `beforeTurn` hook for inbox polling, with 50-turn cap
+2. If stop_reason is `tool_use`, executes each tool via `ToolRuntime.invokeTool()` — all tools including orchestration tools (task, spawn_teammate) are dispatched uniformly; no if-else interception in the loop
+3. If stop_reason is anything else, triggers `Stop` hook (which can force continuation), then returns
+4. Enforces max_turns and timeout via `agent/deadline.ts`
+5. Six hook trigger points: LoopStart, UserPromptSubmit, PreToolUse, PostToolUse, ToolResultsReady, Stop
+6. Subagents use the same `agentLoop()` with restricted tools and fewer turns; orchestration tools are registered at startup via `registerTool()`
+7. Teammates also reuse `agentLoop()` — inbox polling and notification injection are handled by `UserPromptSubmit` hook in `runtimeHooks.ts`
+
+**Hooks** (`src/hooks/index.ts`):
+- Process-local hook bus: `registerHook(event, callback)` + `triggerHooks(event, ...args)` for 6 events
+- Callbacks return `null` to continue, `string` to block (PreToolUse) or force continuation (Stop)
+
+**Agent runtime** (`src/agent/`):
+- `loop.ts` — the main agent loop, 139 lines, no domain logic
+- `deadline.ts` — timeout/deadline utilities (AgentLoopTimeoutError, awaitWithDeadline, throwIfDeadlineExpired)
+- `options.ts` — AgentLoopOptions (4 fields: maxTurns, timeoutMs, allowedTools, system) + normalizeAgentLoopOptions()
+- `subagent.ts` — constrained agentLoop runner for the `task` tool
+- `response.ts` — `describeFinalResponse()` for formatting agent output
+- `contextCompact.ts` — micro-compact (per-turn result compression, >30k tokens) + auto-compact (LLM summarization, >50k tokens)
+
+**App wiring** (`src/app/`):
+- `context.ts` — AppContext (DI container): SkillLoader, MemoryManager, ToolRuntime, TeammateManager
+- `orchestrationTools.ts` — registers `task` and `spawn_teammate` as dynamic tools via `toolRuntime.registerTool()`; launches teammate loops
+- `runtimeHooks.ts` — registers all business hooks: task status injection, background/teammate notification injection, task reminder state machine (per-agent via AsyncLocalStorage)
 
 **Tools** (`src/tools/`):
-- `toolDefinitions.ts` — Anthropic tool schemas (what the model sees). 17 tools total; `allowedTools` filters per agent role
-- `toolRuntime.ts` — dispatching handler that maps tool names to implementations. Uses `requireString`/`requireInteger` helpers for input validation; `agentIdentity` (AsyncLocalStorage) propagates caller identity for team tools
-- File tools (`bash`, `read_file`, `write_file`, `edit_file`) all route through `safePath.ts` which resolves symlinks and enforces workspace containment
+- `toolDefinitions.ts` — Anthropic tool schemas (what the model sees); `allowedTools` filters per agent role
+- `toolRuntime.ts` — dispatching handler with `registerTool()` for dynamic tool registration; `agentIdentity` (AsyncLocalStorage) propagates caller identity for team tools; uses `requireString`/`requireInteger` helpers for input validation
+- File tools (`bash`, `read_file`, `write_file`, `edit_file`) route through `safePath.ts` which resolves symlinks and enforces workspace containment
 - `taskManager.ts` — JSON-file task persistence in `.tasks/` with status transitions (pending→in_progress→completed) and blocking dependencies
-- `backgroundManager.ts` — fire-and-forget shell commands with notification queue, consumed by agentLoop as `<background-results>`
-- `subagent.ts` — constrained `agentLoop` runner for the `task` tool; `TEAMMATE_ALLOWED_TOOLS` re-export moved to team module
+- `backgroundManager.ts` — fire-and-forget shell commands with notification queue
 
 **Agent Teams** (`src/team/`):
-- `teammateManager.ts` — spawn/fire-and-forget teammate lifecycle (working→idle→shutdown), in-memory inbox Map per teammate, notification queue for `<teammate-updates>` injection
-- `types.ts` — TeamMember, TeamMessage, TeamConfig; 5 message types declared (message/broadcast/shutdown_request/shutdown_response/plan_approval_response)
-- Teammates share the same `agentLoop()` as the lead, differentiated by `allowedTools` (6 tools vs lead's 17), `system` prompt, and `beforeTurn` callback for inbox polling
+- `teammateManager.ts` — spawn/fire-and-forget teammate lifecycle (working→idle→shutdown), in-memory inbox Map per teammate, notification queue
+- `types.ts` — TeamMember, TeamMessage; 5 message types (message/broadcast/shutdown_request/shutdown_response/plan_approval_response)
 
 **Skills** (`src/skills/skillLoader.ts`):
 - Two-layer injection: `getDescriptions()` returns a short list for the system prompt; `getContent(name)` returns the full SKILL.md body on tool call
-- Directory convention: `skills/<name>/SKILL.md` with `---\ndescription: ...\n---\n` YAML frontmatter
-- Loaded at startup via `runtime.ts` singleton
+- Directory convention: `skills/<name>/SKILL.md` with YAML frontmatter
 
-**Context compaction** (`src/contextCompact.ts`):
-- **Micro-compact** (per-turn, >30k estimated tokens): clears old tool results, preserving the last 8 and any `read_file` results
-- **Auto-compact** (per-turn, >50k tokens): sends older messages to a summarizer model, saves full transcript to `.transcripts/`, replaces history with summary + recent messages
+**Memory** (`src/memory/`):
+- `memoryManager.ts` — cross-session persistent memory (`.memory/*.md`) with index injection, dual write paths (tool + background extraction), and session-exit consolidation
+- `types.ts` — MemoryType, MemoryEntry
 
-**Config** (`src/config.ts`): Reads env vars, initializes Anthropic client. `runtime.ts` holds stateful singletons (currently just `skillLoader`). Dependency direction: config → runtime (never reverse).
+**Config** (`src/config.ts`): Reads env vars, initializes Anthropic client, assembles system prompt via `buildSystem()`
 
 ## API Provider Compatibility
 

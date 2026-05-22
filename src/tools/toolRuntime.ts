@@ -14,8 +14,8 @@ import { runWriteFile } from "./writeFileTool.js";
 
 export const agentIdentity = new AsyncLocalStorage<string>();
 
-type ToolInput = Record<string, unknown>;
-type ToolHandler = (input: ToolInput) => Promise<string>;
+export type ToolInput = Record<string, unknown>;
+export type ToolHandler = (input: ToolInput) => Promise<string> | string;
 
 function hasOwn(input: ToolInput, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(input, key);
@@ -66,6 +66,10 @@ export class ToolRuntime {
 
   setTeammateManager(tm: TeammateManager): void {
     this.teammateManager = tm;
+  }
+
+  registerTool(name: string, handler: ToolHandler): void {
+    this.handlers[name] = handler;
   }
 
   private readonly handlers: Record<string, ToolHandler> = {

@@ -21,6 +21,15 @@ The project is intentionally small so each harness concern stays visible in code
 - **Agent Teams** — persistent named teammates with async mailboxes, inbox polling, and notification injection
 - **Memory** — cross-session persistent memory (`.memory/*.md`) with index injection, dual write paths (tool + background extraction), and session-exit consolidation
 
+## Source Layout
+
+- `src/agent/` — model loop, loop options, deadline handling, context compaction, and subagent runner
+- `src/app/` — app object graph and runtime wiring, including orchestration tools and hooks
+- `src/cli/` — interactive readline shell and terminal presentation helpers
+- `src/hooks/` — process-local hook bus used by app wiring, not core loop policy
+- `src/tools/` — tool schemas, tool runtime dispatch, and concrete local tool implementations
+- `src/team/`, `src/memory/`, `src/skills/` — focused domains used by the app/runtime layer
+
 ## Pre-merge Checklist
 
 - [ ] **Reusability** — Would this still work if called from a CLI/test/doc-gen?

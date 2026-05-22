@@ -3,9 +3,9 @@ import {
   agentLoop,
   DEFAULT_SUB_AGENT_MAX_TURNS,
   DEFAULT_SUB_AGENT_TIMEOUT_MS,
-} from "./agentLoop.js";
-import { describeFinalResponse } from "./format.js";
-import type { ToolRuntime } from "./tools/toolRuntime.js";
+} from "./loop.js";
+import { describeFinalResponse } from "./response.js";
+import type { ToolRuntime } from "../tools/toolRuntime.js";
 
 export type SubAgentOptions = {
   maxTurns?: number;
@@ -37,7 +37,6 @@ export async function runSubAgent(
       maxTurns: options?.maxTurns ?? DEFAULT_SUB_AGENT_MAX_TURNS,
       timeoutMs: options?.timeoutMs ?? DEFAULT_SUB_AGENT_TIMEOUT_MS,
       allowedTools: SUB_AGENT_ALLOWED_TOOLS,
-      enableTodoReminder: false,
       system: `You are a subagent at ${process.cwd()}. Complete the assigned task and report back concisely.`,
     },
   );

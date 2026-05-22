@@ -1,7 +1,6 @@
 /**
- * Terminal output helpers. Kept separate from agentLoop so the core
- * loop stays UI-agnostic — different callers (CLI, API server, test
- * runner) can supply their own callbacks or none at all.
+ * Terminal presentation for tool results. The CLI registers this through
+ * the hook bus; app and agent runtime layers should not depend on it.
  */
 
 function tryParseJson(output: string): Record<string, unknown> | null {

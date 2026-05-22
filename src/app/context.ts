@@ -1,9 +1,9 @@
 import path from "node:path";
-import { client, MODEL } from "./config.js";
-import { MemoryManager } from "./memory/memoryManager.js";
-import { SkillLoader } from "./skills/skillLoader.js";
-import { TeammateManager } from "./team/teammateManager.js";
-import { ToolRuntime } from "./tools/toolRuntime.js";
+import { client, MODEL } from "../config.js";
+import { MemoryManager } from "../memory/memoryManager.js";
+import { SkillLoader } from "../skills/skillLoader.js";
+import { TeammateManager } from "../team/teammateManager.js";
+import { ToolRuntime } from "../tools/toolRuntime.js";
 
 export interface AppContext {
   skillLoader: SkillLoader;

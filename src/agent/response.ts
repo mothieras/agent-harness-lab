@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { AgentLoopStopReason } from "./agentLoop.js";
+import type { AgentLoopStopReason } from "./loop.js";
 
 function textFromContent(
   content: Anthropic.Messages.Message["content"],
