@@ -4,9 +4,13 @@ import { safePath } from "./safePath.js";
 
 const MAX_OUTPUT_CHARS = 50_000;
 
-export async function runReadFile(pathArg: string, limit?: number): Promise<string> {
+export async function runReadFile(
+  pathArg: string,
+  workspaceRoot: string,
+  limit?: number,
+): Promise<string> {
   try {
-    const text = await readFile(await safePath(pathArg), "utf8");
+    const text = await readFile(await safePath(pathArg, workspaceRoot), "utf8");
     let lines = text.split(/\r?\n/);
 
     if (typeof limit === "number" && limit > 0 && limit < lines.length) {

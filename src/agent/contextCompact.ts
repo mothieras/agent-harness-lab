@@ -68,8 +68,9 @@ function estimateTokens(
 
 async function saveTranscript(
   messages: Anthropic.Messages.MessageParam[],
+  workspaceRoot: string,
 ): Promise<string> {
-  const dir = join(process.cwd(), TRANSCRIPT_DIR);
+  const dir = join(workspaceRoot, TRANSCRIPT_DIR);
   await mkdir(dir, { recursive: true });
 
   const transcriptPath = join(dir, `transcript_${Date.now()}.jsonl`);
@@ -249,8 +250,9 @@ async function summarizeConversation(summaryInput: string): Promise<string> {
 async function compactMessages(
   messages: Anthropic.Messages.MessageParam[],
   reason: string,
+  workspaceRoot = process.cwd(),
 ): Promise<boolean> {
-  const transcriptPath = await saveTranscript(messages);
+  const transcriptPath = await saveTranscript(messages, workspaceRoot);
   const { oldMessages, recentMessages } = splitMessagesForAutoCompact(
     messages,
     RECENT_RAW_CHAR_LIMIT,
@@ -286,16 +288,18 @@ async function compactMessages(
 
 export async function autoCompactIfNeeded(
   messages: Anthropic.Messages.MessageParam[],
+  workspaceRoot?: string,
 ): Promise<boolean> {
   if (estimateTokens(messages) <= AUTO_COMPACT_THRESHOLD) return false;
 
-  return compactMessages(messages, "automatic token threshold");
+  return compactMessages(messages, "automatic token threshold", workspaceRoot);
 }
 
 export async function forceCompact(
   messages: Anthropic.Messages.MessageParam[],
+  workspaceRoot?: string,
 ): Promise<boolean> {
   if (messages.length === 0) return false;
 
-  return compactMessages(messages, "manual slash command");
+  return compactMessages(messages, "manual slash command", workspaceRoot);
 }

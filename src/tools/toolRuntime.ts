@@ -51,17 +51,21 @@ function optionalArrayOfIntegers(input: ToolInput, key: string): number[] | unde
 }
 
 export class ToolRuntime {
-  private readonly taskManager = new TaskManager(
-    path.join(process.cwd(), ".tasks"),
-  );
-  private readonly bg = new BackgroundManager();
+  private readonly taskManager: TaskManager;
+  private readonly bg: BackgroundManager;
   private readonly skillLoader: SkillLoader;
   private readonly memoryManager: MemoryManager;
   private teammateManager: TeammateManager | null = null;
 
-  constructor(skillLoader: SkillLoader, memoryManager: MemoryManager) {
+  constructor(
+    skillLoader: SkillLoader,
+    memoryManager: MemoryManager,
+    private readonly workspaceRoot: string,
+  ) {
     this.skillLoader = skillLoader;
     this.memoryManager = memoryManager;
+    this.taskManager = new TaskManager(path.join(workspaceRoot, ".tasks"));
+    this.bg = new BackgroundManager(workspaceRoot);
   }
 
   setTeammateManager(tm: TeammateManager): void {
@@ -78,14 +82,18 @@ export class ToolRuntime {
       if (!command || command.trim() === "") {
         return "Error: Missing required 'command' for bash tool.";
       }
-      return runBash(command);
+      return runBash(command, this.workspaceRoot);
     },
     read_file: async (input) => {
       const filepath = requireString(input, "path");
       if (filepath === null) {
         return "Error: Missing required 'path' for read_file tool.";
       }
-      return runReadFile(filepath, optionalInteger(input, "limit"));
+      return runReadFile(
+        filepath,
+        this.workspaceRoot,
+        optionalInteger(input, "limit"),
+      );
     },
     write_file: async (input) => {
       const filepath = requireString(input, "path");
@@ -96,7 +104,7 @@ export class ToolRuntime {
       if (content === null) {
         return "Error: Missing required 'content' for write_file tool.";
       }
-      return runWriteFile(filepath, content);
+      return runWriteFile(filepath, content, this.workspaceRoot);
     },
     edit_file: async (input) => {
       const filepath = requireString(input, "path");
@@ -111,7 +119,7 @@ export class ToolRuntime {
       if (newText === null) {
         return "Error: Missing required 'new_text' for edit_file tool.";
       }
-      return runEditFile(filepath, oldText, newText);
+      return runEditFile(filepath, oldText, newText, this.workspaceRoot);
     },
     load_skill: async (input) => {
       const name = requireString(input, "name");

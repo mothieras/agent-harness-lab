@@ -18,7 +18,6 @@ import type {
 } from "./options.js";
 import { client, MODEL } from "../config.js";
 import { autoCompactIfNeeded, microCompact } from "./contextCompact.js";
-import { triggerHooks } from "../hooks/index.js";
 import type { ToolRuntime } from "../tools/toolRuntime.js";
 
 export type { AgentLoopOptions, AgentLoopResult, AgentLoopStopReason };
@@ -47,7 +46,7 @@ export async function agentLoop(
   let turns = 0;
 
   try {
-    triggerHooks("LoopStart", messages);
+    loopOptions.hooks?.trigger("LoopStart", messages);
 
     while (true) {
       if (turns >= loopOptions.maxTurns) {
@@ -62,12 +61,12 @@ export async function agentLoop(
 
       microCompact(messages);
       await awaitWithDeadline(
-        autoCompactIfNeeded(messages),
+        autoCompactIfNeeded(messages, loopOptions.workspaceRoot),
         loopOptions.deadlineAt,
       );
       turns += 1;
 
-      triggerHooks("UserPromptSubmit", messages);
+      loopOptions.hooks?.trigger("UserPromptSubmit", messages);
 
       const response = await awaitWithDeadline(
         client.messages.create(
@@ -85,7 +84,7 @@ export async function agentLoop(
       );
       messages.push({ role: "assistant", content: response.content });
       if (response.stop_reason !== "tool_use") {
-        const forceContinue = triggerHooks("Stop", messages);
+        const forceContinue = loopOptions.hooks?.trigger("Stop", messages);
         if (forceContinue) {
           messages.push({ role: "user", content: forceContinue });
           continue;
@@ -101,7 +100,11 @@ export async function agentLoop(
         if (block.type !== "tool_use") continue;
         throwIfDeadlineExpired(loopOptions.deadlineAt);
 
-        const blocked = triggerHooks("PreToolUse", block);
+        // Tool execution gating: PreToolUse hooks run first (can block entirely,
+        // skipping permission), then the optional permission pipeline (deny list →
+        // rule matching → user approval). A PreToolUse hook that blocks bypasses
+        // permission — useful for administrative blocks, not user prompts.
+        const blocked = loopOptions.hooks?.trigger("PreToolUse", block);
         if (blocked) {
           results.push({
             type: "tool_result",
@@ -111,13 +114,33 @@ export async function agentLoop(
           continue;
         }
 
+        if (loopOptions.checkPermission) {
+          const permResult = await awaitWithDeadline(
+            loopOptions.checkPermission(
+              block.name,
+              block.input as Record<string, unknown>,
+            ),
+            loopOptions.deadlineAt,
+          );
+          if (!permResult.allowed) {
+            results.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: `Permission denied: ${
+                permResult.reason ?? "blocked by permission check"
+              }`,
+            });
+            continue;
+          }
+        }
+
         let output: string;
         output = await awaitWithDeadline(
           toolRuntime.invokeTool(block.name, block.input),
           loopOptions.deadlineAt,
         );
 
-        triggerHooks("PostToolUse", block, output);
+        loopOptions.hooks?.trigger("PostToolUse", block, output);
         results.push({
           type: "tool_result",
           tool_use_id: block.id,
@@ -125,7 +148,7 @@ export async function agentLoop(
         });
       }
 
-      const extraResult = triggerHooks("ToolResultsReady", results);
+      const extraResult = loopOptions.hooks?.trigger("ToolResultsReady", results);
       if (extraResult) {
         results.push({ type: "text", text: extraResult });
       }

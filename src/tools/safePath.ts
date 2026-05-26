@@ -27,8 +27,11 @@ function isInsideWorkspace(workdir: string, target: string): boolean {
   );
 }
 
-export async function safePath(inputPath: string): Promise<string> {
-  const workdir = await realpath(process.cwd());
+export async function safePath(
+  inputPath: string,
+  workspaceRoot: string,
+): Promise<string> {
+  const workdir = await realpath(workspaceRoot);
   const resolvedPath = path.resolve(workdir, inputPath);
   const existingPath = await nearestExistingPath(resolvedPath);
   const realExistingPath = await realpath(existingPath);

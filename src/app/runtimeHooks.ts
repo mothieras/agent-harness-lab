@@ -1,6 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AppContext } from "./context.js";
-import { registerHook } from "../hooks/index.js";
 import { agentIdentity } from "../tools/toolRuntime.js";
 
 type ToolResultBlock =
@@ -40,12 +39,12 @@ export function registerRuntimeHooks(app: AppContext): void {
     return state;
   }
 
-  registerHook("LoopStart", () => {
+  app.hooks.register("LoopStart", () => {
     taskStates.set(agentName(), newTaskLoopState());
     return null;
   });
 
-  registerHook("UserPromptSubmit", (rawMessages) => {
+  app.hooks.register("UserPromptSubmit", (rawMessages) => {
     const messages = rawMessages as Anthropic.Messages.MessageParam[];
     const state = taskState();
 
@@ -90,7 +89,7 @@ export function registerRuntimeHooks(app: AppContext): void {
     return null;
   });
 
-  registerHook("PostToolUse", (block, output) => {
+  app.hooks.register("PostToolUse", (block, output) => {
     const b = block as { name: string; input: Record<string, unknown> };
 
     if (b.name === "task_create" || b.name === "task_update") {
@@ -103,7 +102,7 @@ export function registerRuntimeHooks(app: AppContext): void {
     return null;
   });
 
-  registerHook("ToolResultsReady", (rawResults) => {
+  app.hooks.register("ToolResultsReady", (rawResults) => {
     const state = taskState();
     if (!state.sawTaskTool) return null;
 

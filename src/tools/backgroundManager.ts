@@ -21,6 +21,8 @@ export class BackgroundManager {
   private tasks = new Map<string, BgTask>();
   private notifications: BgNotification[] = [];
 
+  constructor(private readonly workspaceRoot: string) {}
+
   run(command: string): string {
     if (isDangerousCommand(command)) {
       return "Error: Dangerous command blocked";
@@ -34,7 +36,7 @@ export class BackgroundManager {
 
     exec(
       command,
-      { cwd: process.cwd(), timeout: 300_000 },
+      { cwd: this.workspaceRoot, timeout: 300_000 },
       (error, stdout, stderr) => {
         const task = this.tasks.get(taskId)!;
         const output = (stdout + stderr).trim() || "(no output)";

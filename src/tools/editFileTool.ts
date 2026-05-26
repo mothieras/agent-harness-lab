@@ -6,9 +6,10 @@ export async function runEditFile(
   pathArg: string,
   oldText: string,
   newText: string,
+  workspaceRoot: string,
 ): Promise<string> {
   try {
-    const filePath = await safePath(pathArg);
+    const filePath = await safePath(pathArg, workspaceRoot);
     const content = await readFile(filePath, "utf8");
     if (!content.includes(oldText)) {
       return `Error: Text not found in ${pathArg}`;

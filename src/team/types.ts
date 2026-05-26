@@ -1,9 +1,10 @@
-export type TeamMemberStatus = "working" | "idle" | "shutdown";
+export type TeamMemberStatus = "working" | "idle" | "failed" | "shutdown";
 
 export interface TeamMember {
   name: string;
   role: string;
   status: TeamMemberStatus;
+  lastError?: string;
 }
 
 export const VALID_MSG_TYPES = [

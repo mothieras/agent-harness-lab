@@ -7,10 +7,20 @@ import { createAppContext } from "../app/context.js";
 import type { AppContext } from "../app/context.js";
 import { registerOrchestrationTools } from "../app/orchestrationTools.js";
 import { registerRuntimeHooks } from "../app/runtimeHooks.js";
-import { buildSystem } from "../config.js";
-import { registerHook } from "../hooks/index.js";
+import { buildSystemPrompt } from "../prompt/assembler.js";
+import type { PromptContext } from "../prompt/assembler.js";
+import { createPermissionChecker } from "../permission/permission.js";
+import type { AskUserFn } from "../permission/types.js";
 import { agentIdentity } from "../tools/toolRuntime.js";
 import { logToolResult } from "./toolLog.js";
+
+function buildPromptContext(app: AppContext): PromptContext {
+  return {
+    workspace: app.workspaceRoot,
+    memories: app.memoryManager.buildIndex(),
+    skills: app.skillLoader.getDescriptions(),
+  };
+}
 
 function printTaskStatus(app: AppContext): void {
   const status = app.toolRuntime.taskStatusForUser();
@@ -21,6 +31,7 @@ function printTaskStatus(app: AppContext): void {
 async function handleSlashCommand(
   command: string,
   history: Anthropic.Messages.MessageParam[],
+  workspaceRoot: string,
 ): Promise<"handled" | "exit"> {
   const [name] = command.slice(1).trim().split(/\s+/, 1);
   switch (name) {
@@ -33,7 +44,7 @@ async function handleSlashCommand(
       console.log();
       return "handled";
     case "compact": {
-      const compacted = await forceCompact(history);
+      const compacted = await forceCompact(history, workspaceRoot);
       console.log(compacted ? "Context compacted." : "Nothing to compact.");
       console.log();
       return "handled";
@@ -47,16 +58,30 @@ async function handleSlashCommand(
 
 export async function runCli(): Promise<void> {
   const app = createAppContext(process.cwd());
-  const system = buildSystem(app.skillLoader, app.memoryManager);
+  const system = buildSystemPrompt(buildPromptContext(app));
   registerOrchestrationTools(app);
+
+  const rl = readline.createInterface({ input, output });
+
+  const askUser: AskUserFn = async (toolName, input_, reason) => {
+    console.log(`\n\x1b[33m⚠  ${reason}\x1b[0m`);
+    console.log(`   Tool: ${toolName}(${JSON.stringify(input_)})`);
+    const choice = await rl.question("   Allow? [y/N] ");
+    return (
+      choice.trim().toLowerCase() === "y" ||
+      choice.trim().toLowerCase() === "yes"
+    );
+  };
+
+  const checkPermission = createPermissionChecker(app.workspaceRoot, askUser);
+  app.checkPermission = checkPermission;
   registerRuntimeHooks(app);
-  registerHook("PostToolUse", (block, output) => {
+  app.hooks.register("PostToolUse", (block, output) => {
     const b = block as { name: string; input: Record<string, unknown> };
     logToolResult(b.name, b.input, output as string);
     return null;
   });
 
-  const rl = readline.createInterface({ input, output });
   const history: Anthropic.Messages.MessageParam[] = [];
   try {
     while (true) {
@@ -64,7 +89,11 @@ export async function runCli(): Promise<void> {
       const trimmed = query.trim();
       if (trimmed === "") continue;
       if (trimmed.startsWith("/")) {
-        const result = await handleSlashCommand(trimmed, history);
+        const result = await handleSlashCommand(
+          trimmed,
+          history,
+          app.workspaceRoot,
+        );
         if (result === "exit") break;
         continue;
       }
@@ -72,6 +101,9 @@ export async function runCli(): Promise<void> {
       const { content, stopReason } = await agentIdentity.run("lead", () =>
         agentLoop(history, app.toolRuntime, {
           system,
+          workspaceRoot: app.workspaceRoot,
+          checkPermission,
+          hooks: app.hooks,
         }),
       );
       console.log(describeFinalResponse(content, stopReason));
@@ -106,6 +138,9 @@ export async function runCli(): Promise<void> {
         const result = await agentIdentity.run("lead", () =>
           agentLoop(history, app.toolRuntime, {
             system,
+            workspaceRoot: app.workspaceRoot,
+            checkPermission,
+            hooks: app.hooks,
           }),
         );
         console.log(describeFinalResponse(result.content, result.stopReason));

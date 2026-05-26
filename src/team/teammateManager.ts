@@ -23,6 +23,7 @@ export class TeammateManager {
       }
       existing.status = "working";
       existing.role = role;
+      delete existing.lastError;
     } else {
       this.members.set(name, { name, role, status: "working" });
     }
@@ -31,15 +32,28 @@ export class TeammateManager {
   }
 
   registerLoop(name: string, loop: Promise<unknown>): void {
-    loop.finally(() => {
-      const member = this.members.get(name);
-      if (member && member.status !== "shutdown") {
-        member.status = "idle";
-        this.notifications.push(
-          `Teammate '${name}' (${member.role}) finished and is now idle.`,
-        );
-      }
-    });
+    void loop.then(
+      () => {
+        const member = this.members.get(name);
+        if (member && member.status !== "shutdown") {
+          member.status = "idle";
+          this.notifications.push(
+            `Teammate '${name}' (${member.role}) finished and is now idle.`,
+          );
+        }
+      },
+      (error: unknown) => {
+        const member = this.members.get(name);
+        if (member && member.status !== "shutdown") {
+          const message = error instanceof Error ? error.message : String(error);
+          member.status = "failed";
+          member.lastError = message;
+          this.notifications.push(
+            `Teammate '${name}' (${member.role}) failed: ${message}`,
+          );
+        }
+      },
+    );
   }
 
   send(from: string, to: string, content: string, msgType = "message"): string {
@@ -86,7 +100,8 @@ export class TeammateManager {
     if (this.members.size === 0) return "No teammates.";
     const lines: string[] = [];
     for (const m of this.members.values()) {
-      lines.push(`  ${m.name} (${m.role}): ${m.status}`);
+      const error = m.lastError ? ` (${m.lastError})` : "";
+      lines.push(`  ${m.name} (${m.role}): ${m.status}${error}`);
     }
     return lines.join("\n");
   }

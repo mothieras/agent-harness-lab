@@ -1,6 +1,6 @@
 import type { AppContext } from "./context.js";
 import { agentLoop, runSubAgent } from "../agent/index.js";
-import type { SubAgentOptions } from "../agent/index.js";
+import type { AgentLoopOptions, SubAgentOptions } from "../agent/index.js";
 import { TEAMMATE_ALLOWED_TOOLS } from "../team/teammateManager.js";
 import { agentIdentity } from "../tools/toolRuntime.js";
 import type { ToolInput } from "../tools/toolRuntime.js";
@@ -11,12 +11,18 @@ export function registerOrchestrationTools(app: AppContext): void {
     if (result.startsWith("Error:")) return result;
 
     const messages = [{ role: "user" as const, content: prompt }];
+    const loopOptions: AgentLoopOptions = {
+      maxTurns: 50,
+      allowedTools: TEAMMATE_ALLOWED_TOOLS,
+      workspaceRoot: app.workspaceRoot,
+      hooks: app.hooks,
+      system: `You are '${name}', role: ${role}, at ${app.workspaceRoot}. Use send_message to communicate results or ask questions. Use read_inbox to check for new messages. Complete your assigned task and report back.`,
+    };
+    if (app.checkPermission) {
+      loopOptions.checkPermission = app.checkPermission;
+    }
     const loop = agentIdentity.run(name, () =>
-      agentLoop(messages, app.toolRuntime, {
-        maxTurns: 50,
-        allowedTools: TEAMMATE_ALLOWED_TOOLS,
-        system: `You are '${name}', role: ${role}, at ${process.cwd()}. Use send_message to communicate results or ask questions. Use read_inbox to check for new messages. Complete your assigned task and report back.`,
-      }),
+      agentLoop(messages, app.toolRuntime, loopOptions),
     );
     app.teammateManager.registerLoop(name, loop);
 
@@ -29,7 +35,13 @@ export function registerOrchestrationTools(app: AppContext): void {
       return "Error: Missing required 'prompt' for task tool.";
     }
 
-    const subOpts: SubAgentOptions = {};
+    const subOpts: SubAgentOptions = {
+      hooks: app.hooks,
+      workspaceRoot: app.workspaceRoot,
+    };
+    if (app.checkPermission) {
+      subOpts.checkPermission = app.checkPermission;
+    }
     const maxTurns = input.max_turns;
     if (typeof maxTurns === "number" && Number.isInteger(maxTurns)) {
       subOpts.maxTurns = maxTurns;

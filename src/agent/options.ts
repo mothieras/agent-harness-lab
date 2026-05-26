@@ -1,5 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { getTools } from "../tools/index.js";
+import type { CheckPermissionFn } from "../permission/types.js";
+import type { HookBus } from "../hooks/index.js";
 
 export type AgentLoopStopReason =
   | Anthropic.Messages.Message["stop_reason"]
@@ -10,7 +12,11 @@ export type AgentLoopOptions = {
   maxTurns?: number;
   timeoutMs?: number;
   allowedTools?: string[];
+  /** System prompt. Prefer {@link buildSystemPrompt} from prompt/assembler; this fallback is bare-bones. */
   system?: string;
+  workspaceRoot?: string;
+  checkPermission?: CheckPermissionFn;
+  hooks?: HookBus;
 };
 
 export type AgentLoopResult = {
@@ -22,8 +28,11 @@ export type NormalizedAgentLoopOptions = {
   maxTurns: number;
   timeoutMs: number | undefined;
   deadlineAt: number | undefined;
+  workspaceRoot: string;
   system: string;
   tools: ReturnType<typeof getTools>;
+  checkPermission: AgentLoopOptions["checkPermission"];
+  hooks: HookBus | undefined;
 };
 
 export const DEFAULT_MAIN_AGENT_MAX_TURNS = 200;
@@ -62,9 +71,14 @@ export function normalizeAgentLoopOptions(
     maxTurns,
     timeoutMs,
     deadlineAt,
+    workspaceRoot: options?.workspaceRoot ?? process.cwd(),
     system:
       options?.system ??
-      `You are a coding agent at ${process.cwd()}. Use tools to solve tasks.`,
+      `You are a coding agent at ${
+        options?.workspaceRoot ?? process.cwd()
+      }. Use tools to solve tasks.`,
     tools,
+    checkPermission: options?.checkPermission,
+    hooks: options?.hooks,
   };
 }

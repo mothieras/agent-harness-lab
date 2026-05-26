@@ -35,13 +35,16 @@ export function isDangerousCommand(command: string): boolean {
   return DANGEROUS.some((pattern) => command.includes(pattern));
 }
 
-export async function runBash(command: string): Promise<string> {
+export async function runBash(
+  command: string,
+  workspaceRoot: string,
+): Promise<string> {
   if (isDangerousCommand(command)) {
     return "Error: Dangerous command blocked";
   }
 
   try {
-    const r = await execAsync(command, process.cwd(), 120_000);
+    const r = await execAsync(command, workspaceRoot, 120_000);
     const out = (r.stdout + r.stderr).trim();
     return out ? out.slice(-50000) : "(no output)";
   } catch (e) {
