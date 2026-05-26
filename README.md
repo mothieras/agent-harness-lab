@@ -1,34 +1,37 @@
 ## Agent Harness Lab
 
-A TypeScript learning harness for building coding-agent runtime pieces step by step:
-tool loops, local tools, skill loading, subagents, context compaction,
-persistent task tracking, background task execution, agent teams with mailbox communication,
-persistent memory with cross-session retention, and DI container (AppContext) for service lifecycle management.
-
-Based on the [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code) tutorial series,
-reimplemented in TypeScript. Learning notes are in `note/`.
+A TypeScript learning harness for building coding-agent runtime pieces step by step,
+following the [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code) tutorial series.
 
 The project is intentionally small so each harness concern stays visible in code.
 
 ## What's Built
 
-- **Tool Use** — bash, read_file, write_file, edit_file with workspace containment (safePath)
-- **Subagent** — constrained agentLoop runner for the `task` tool, isolated execution
-- **Skill Loading** — directory-based skill injection with YAML frontmatter
-- **Context Compaction** — micro-compact (per-turn result compression) + auto-compact (LLM summarization)
-- **Task System** — JSON-file persistent tasks (`.tasks/`) with status transitions and dependency graph
-- **Background Tasks** — fire-and-forget shell commands with notification-based result injection
-- **Agent Teams** — persistent named teammates with async mailboxes, inbox polling, and notification injection
-- **Memory** — cross-session persistent memory (`.memory/*.md`) with index injection, dual write paths (tool + background extraction), and session-exit consolidation
+- **Agent Loop** — model ↔ tools core loop with max_turns and deadline enforcement
+- **Tool System** — 18 tools including file ops, task tracking, background tasks, team comms
+- **System Prompt** — stability-ordered section assembly (soul → guidelines → skills → memory)
+- **Permission Pipeline** — three-gate check (deny list → rule matching → user approval)
+- **Hook Bus** — six event points with instance-based HookBus (not global state)
+- **Subagent** — constrained agentLoop via `subagent` tool, isolated execution
+- **Teammate** — persistent async agents with inbox-based communication via `teammate` tool
+- **Skill Loading** — two-layer injection: index in system prompt, full content on demand
+- **Context Compaction** — micro-compact (>30k tokens) + auto-compact (>50k tokens)
+- **Task System** — JSON-file persistent tasks (`.tasks/`) with status transitions and dependencies
+- **Background Tasks** — fire-and-forget shell commands with notification injection
+- **Memory** — cross-session persistent memory (`.memory/*.md`) with auto-extraction and consolidation
 
 ## Source Layout
 
-- `src/agent/` — model loop, loop options, deadline handling, context compaction, and subagent runner
-- `src/app/` — app object graph and runtime wiring, including orchestration tools and hooks
-- `src/cli/` — interactive readline shell and terminal presentation helpers
-- `src/hooks/` — process-local hook bus used by app wiring, not core loop policy
-- `src/tools/` — tool schemas, thin runtime dispatch, input parsing, and grouped local tool handlers
-- `src/team/`, `src/memory/`, `src/skills/` — focused domains used by the app/runtime layer
+- `src/agent/` — core loop, options, deadline, context compaction, subagent runner
+- `src/prompt/` — system prompt sections and stability-ordered assembly
+- `src/permission/` — three-gate permission pipeline (deny list, rules, user approval)
+- `src/hooks/` — HookBus class with register/trigger for six loop events
+- `src/tools/` — tool schemas, runtime dispatch, handlers grouped by concern, input validation
+- `src/app/` — DI container (AppContext), orchestration tools, runtime hooks, message injection
+- `src/cli/` — interactive readline shell and terminal presentation
+- `src/team/` — teammate lifecycle, inbox messaging, notifications
+- `src/memory/` — cross-session persistent memory with index and consolidation
+- `src/skills/` — directory-based skill loading with YAML frontmatter
 
 ## Pre-merge Checklist
 
