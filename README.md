@@ -27,7 +27,7 @@ The project is intentionally small so each harness concern stays visible in code
 - `src/app/` — app object graph and runtime wiring, including orchestration tools and hooks
 - `src/cli/` — interactive readline shell and terminal presentation helpers
 - `src/hooks/` — process-local hook bus used by app wiring, not core loop policy
-- `src/tools/` — tool schemas, tool runtime dispatch, and concrete local tool implementations
+- `src/tools/` — tool schemas, thin runtime dispatch, input parsing, and grouped local tool handlers
 - `src/team/`, `src/memory/`, `src/skills/` — focused domains used by the app/runtime layer
 
 ## Pre-merge Checklist

@@ -8,3 +8,5 @@ dist/
 .team
 .playwright-mcp/
 .memory/
+.cursor
+.codegraph

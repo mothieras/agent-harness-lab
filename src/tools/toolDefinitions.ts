@@ -139,9 +139,10 @@ export const TOOLS = [
     },
   },
   {
-    name: "task",
+    name: "subagent",
     description:
-      "Run a subtask in a clean subagent context and return a concise summary. Defaults to 90 turns and 30 minutes.",
+      "Run a task in an isolated subagent context and return a concise summary. Defaults to 90 turns and 30 minutes.",
+
     input_schema: {
       type: "object" as const,
       properties: {
@@ -166,9 +167,9 @@ export const TOOLS = [
     },
   },
   {
-    name: "spawn_teammate",
+    name: "teammate",
     description:
-      "Spawn a persistent teammate that runs its own agent loop. Teammates have names, roles, and async mailboxes.",
+      "Create a persistent teammate with its own agent loop, inbox, and async communication.",
     input_schema: {
       type: "object" as const,
       properties: {

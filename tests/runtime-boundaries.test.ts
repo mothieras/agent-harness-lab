@@ -4,7 +4,10 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HookBus } from "../src/hooks/index.js";
+import { pushTaggedUserMessage } from "../src/app/messageInjection.js";
 import { TeammateManager } from "../src/team/teammateManager.js";
+import { agentIdentity } from "../src/tools/agentIdentity.js";
+import { requireNonEmptyString } from "../src/tools/input.js";
 import { ToolRuntime } from "../src/tools/toolRuntime.js";
 
 test("HookBus instances do not share registered callbacks", () => {
@@ -57,4 +60,34 @@ test("TeammateManager records failed loops as failed", async () => {
 
   assert.match(manager.listAll(), /tester \(qa\): failed/);
   assert.match(manager.drainNotifications() ?? "", /failed: boom/);
+});
+
+test("agent identity is available outside the tool runtime dispatcher", () => {
+  const result = agentIdentity.run("reviewer", () => agentIdentity.getStore());
+
+  assert.equal(result, "reviewer");
+});
+
+test("requireNonEmptyString returns tool-scoped errors for missing text", () => {
+  assert.deepEqual(requireNonEmptyString({}, "prompt", "task tool"), {
+    error: "Error: Missing required 'prompt' for task tool.",
+  });
+  assert.deepEqual(requireNonEmptyString({ prompt: "  " }, "prompt", "task tool"), {
+    error: "Error: Missing required 'prompt' for task tool.",
+  });
+  assert.deepEqual(requireNonEmptyString({ prompt: 42 }, "prompt", "task tool"), {
+    value: "42",
+  });
+});
+
+test("pushTaggedUserMessage appends xml-like user blocks consistently", () => {
+  const messages = [];
+
+  pushTaggedUserMessage(messages, "task-status", "one\ntwo");
+  pushTaggedUserMessage(messages, "inbox", "{\"text\":\"hi\"}", "inline");
+
+  assert.deepEqual(messages, [
+    { role: "user", content: "<task-status>\none\ntwo\n</task-status>" },
+    { role: "user", content: "<inbox>{\"text\":\"hi\"}</inbox>" },
+  ]);
 });

@@ -1,131 +1,145 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AppContext } from "./context.js";
-import { agentIdentity } from "../tools/toolRuntime.js";
+import { pushTaggedUserMessage } from "./messageInjection.js";
+import { agentIdentity } from "../tools/agentIdentity.js";
 
 type ToolResultBlock =
   | { type: "tool_result"; tool_use_id: string; content: string }
   | { type: "text"; text: string };
 
 type TaskLoopState = {
-  roundsSinceTaskUpdate: number;
-  sawTaskTool: boolean;
-  sawTaskToolThisTurn: boolean;
-  showTaskStatus: boolean;
+	roundsSinceTaskUpdate: number;
+	sawTaskTool: boolean;
+	sawTaskToolThisTurn: boolean;
+	showTaskStatus: boolean;
 };
 
 function newTaskLoopState(): TaskLoopState {
-  return {
-    roundsSinceTaskUpdate: 0,
-    sawTaskTool: false,
-    sawTaskToolThisTurn: false,
-    showTaskStatus: true,
-  };
+	return {
+		roundsSinceTaskUpdate: 0,
+		sawTaskTool: false,
+		sawTaskToolThisTurn: false,
+		showTaskStatus: true,
+	};
 }
 
 function agentName(): string {
-  return agentIdentity.getStore() ?? "lead";
+	return agentIdentity.getStore() ?? "lead";
 }
 
 export function registerRuntimeHooks(app: AppContext): void {
-  const taskStates = new Map<string, TaskLoopState>();
+	const taskStates = new Map<string, TaskLoopState>();
+	const taskState = () => getTaskState(taskStates, agentName());
 
-  function taskState(): TaskLoopState {
-    const name = agentName();
-    let state = taskStates.get(name);
-    if (!state) {
-      state = newTaskLoopState();
-      taskStates.set(name, state);
-    }
-    return state;
-  }
+	app.hooks.register("LoopStart", () => {
+		taskStates.set(agentName(), newTaskLoopState());
+		return null;
+	});
 
-  app.hooks.register("LoopStart", () => {
-    taskStates.set(agentName(), newTaskLoopState());
-    return null;
-  });
+	app.hooks.register("UserPromptSubmit", (rawMessages) => {
+		const messages = rawMessages as Anthropic.Messages.MessageParam[];
+		injectTaskStatus(app, taskState(), messages);
+		injectBackgroundResults(app, messages);
+		injectInboxMessages(app, messages);
+		injectLeadTeammateUpdates(app, messages);
+		return null;
+	});
 
-  app.hooks.register("UserPromptSubmit", (rawMessages) => {
-    const messages = rawMessages as Anthropic.Messages.MessageParam[];
-    const state = taskState();
+	app.hooks.register("PostToolUse", (block) => {
+		markTaskToolUse(taskState(), block);
+		return null;
+	});
 
-    if (state.showTaskStatus) {
-      const taskSummary = app.toolRuntime.taskSummary();
-      if (taskSummary) {
-        messages.push({
-          role: "user",
-          content: `<task-status>\n${taskSummary}\n</task-status>`,
-        });
-      }
-      state.showTaskStatus = false;
-    }
+	app.hooks.register("ToolResultsReady", (rawResults) => {
+		appendTaskReminder(app, taskState(), rawResults as ToolResultBlock[]);
+		return null;
+	});
+}
 
-    const bgNotif = app.toolRuntime.drainBackgroundNotifications();
-    if (bgNotif) {
-      messages.push({
-        role: "user",
-        content: `<background-results>\n${bgNotif}\n</background-results>`,
-      });
-    }
+function getTaskState(
+	states: Map<string, TaskLoopState>,
+	name: string,
+): TaskLoopState {
+	let state = states.get(name);
+	if (!state) {
+		state = newTaskLoopState();
+		states.set(name, state);
+	}
+	return state;
+}
 
-    const name = agentName();
-    const inboxMessages = app.teammateManager.drainInbox(name);
-    for (const msg of inboxMessages) {
-      messages.push({
-        role: "user",
-        content: `<inbox>${JSON.stringify(msg)}</inbox>`,
-      });
-    }
+function injectTaskStatus(
+	app: AppContext,
+	state: TaskLoopState,
+	messages: Anthropic.Messages.MessageParam[],
+): void {
+	if (!state.showTaskStatus) return;
+	const taskSummary = app.toolRuntime.taskSummary();
+	if (taskSummary) {
+		pushTaggedUserMessage(messages, "task-status", taskSummary);
+	}
+	state.showTaskStatus = false;
+}
 
-    if (name === "lead") {
-      const teammateNotif = app.teammateManager.drainNotifications();
-      if (teammateNotif) {
-        messages.push({
-          role: "user",
-          content: `<teammate-updates>\n${teammateNotif}\n</teammate-updates>`,
-        });
-      }
-    }
+function injectBackgroundResults(
+	app: AppContext,
+	messages: Anthropic.Messages.MessageParam[],
+): void {
+	const backgroundResults = app.toolRuntime.drainBackgroundNotifications();
+	if (!backgroundResults) return;
+	pushTaggedUserMessage(messages, "background-results", backgroundResults);
+}
 
-    return null;
-  });
+function injectInboxMessages(
+	app: AppContext,
+	messages: Anthropic.Messages.MessageParam[],
+): void {
+	for (const msg of app.teammateManager.drainInbox(agentName())) {
+		pushTaggedUserMessage(messages, "inbox", JSON.stringify(msg), "inline");
+	}
+}
 
-  app.hooks.register("PostToolUse", (block, output) => {
-    const b = block as { name: string; input: Record<string, unknown> };
+function injectLeadTeammateUpdates(
+	app: AppContext,
+	messages: Anthropic.Messages.MessageParam[],
+): void {
+	if (agentName() !== "lead") return;
+	const teammateUpdates = app.teammateManager.drainNotifications();
+	if (!teammateUpdates) return;
+	pushTaggedUserMessage(messages, "teammate-updates", teammateUpdates);
+}
 
-    if (b.name === "task_create" || b.name === "task_update") {
-      const state = taskState();
-      state.sawTaskTool = true;
-      state.sawTaskToolThisTurn = true;
-      state.showTaskStatus = true;
-    }
+function markTaskToolUse(state: TaskLoopState, block: unknown): void {
+	const toolUse = block as { name: string };
+	if (toolUse.name !== "task_create" && toolUse.name !== "task_update") return;
+	state.sawTaskTool = true;
+	state.sawTaskToolThisTurn = true;
+	state.showTaskStatus = true;
+}
 
-    return null;
-  });
+function appendTaskReminder(
+	app: AppContext,
+	state: TaskLoopState,
+	results: ToolResultBlock[],
+): void {
+	if (!shouldRemindTaskUpdate(app, state)) return;
+	results.push({
+		type: "text",
+		text: "<reminder>Update your tasks with task_update or task_list.</reminder>",
+	});
+}
 
-  app.hooks.register("ToolResultsReady", (rawResults) => {
-    const state = taskState();
-    if (!state.sawTaskTool) return null;
+function shouldRemindTaskUpdate(app: AppContext, state: TaskLoopState): boolean {
+	if (!state.sawTaskTool) return false;
+	if (state.sawTaskToolThisTurn) {
+		state.roundsSinceTaskUpdate = 0;
+		state.sawTaskToolThisTurn = false;
+		return false;
+	}
 
-    if (state.sawTaskToolThisTurn) {
-      state.roundsSinceTaskUpdate = 0;
-      state.sawTaskToolThisTurn = false;
-      return null;
-    }
-
-    state.roundsSinceTaskUpdate += 1;
-    if (state.roundsSinceTaskUpdate < 3) return null;
-
-    state.roundsSinceTaskUpdate = 0;
-    if (!app.toolRuntime.hasActiveTasks()) {
-      state.sawTaskTool = false;
-      return null;
-    }
-
-    const results = rawResults as ToolResultBlock[];
-    results.push({
-      type: "text",
-      text: "<reminder>Update your tasks with task_update or task_list.</reminder>",
-    });
-    return null;
-  });
+	state.roundsSinceTaskUpdate += 1;
+	if (state.roundsSinceTaskUpdate < 3) return false;
+	state.roundsSinceTaskUpdate = 0;
+	state.sawTaskTool = app.toolRuntime.hasActiveTasks();
+	return state.sawTaskTool;
 }

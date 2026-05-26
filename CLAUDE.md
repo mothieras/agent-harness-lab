@@ -27,7 +27,7 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 7. Teammates also reuse `agentLoop()` — inbox polling and notification injection are handled by `UserPromptSubmit` hook in `runtimeHooks.ts`
 
 **Hooks** (`src/hooks/index.ts`):
-- Process-local hook bus: `registerHook(event, callback)` + `triggerHooks(event, ...args)` for 6 events
+- Process-local hook bus: `register(event, callback)` + `trigger(event, ...args)` for 6 events
 - Callbacks return `null` to continue, `string` to block (PreToolUse) or force continuation (Stop)
 
 **Agent runtime** (`src/agent/`):
@@ -45,7 +45,10 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 
 **Tools** (`src/tools/`):
 - `toolDefinitions.ts` — Anthropic tool schemas (what the model sees); `allowedTools` filters per agent role
-- `toolRuntime.ts` — dispatching handler with `registerTool()` for dynamic tool registration; `agentIdentity` (AsyncLocalStorage) propagates caller identity for team tools; uses `requireString`/`requireInteger` helpers for input validation
+- `toolRuntime.ts` — thin dispatcher/runtime state holder with `registerTool()` for dynamic tool registration
+- `toolHandlers.ts` — built-in tool implementations grouped by concern: file, skill, task, background, team, memory
+- `input.ts` — shared tool input validation helpers (`requireString`, `requireInteger`, optional parsers)
+- `agentIdentity.ts` — AsyncLocalStorage identity context for lead/subagent/teammate execution
 - File tools (`bash`, `read_file`, `write_file`, `edit_file`) route through `safePath.ts` which resolves symlinks and enforces workspace containment
 - `taskManager.ts` — JSON-file task persistence in `.tasks/` with status transitions (pending→in_progress→completed) and blocking dependencies
 - `backgroundManager.ts` — fire-and-forget shell commands with notification queue
