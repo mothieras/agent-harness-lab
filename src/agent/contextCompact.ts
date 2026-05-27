@@ -298,8 +298,9 @@ export async function autoCompactIfNeeded(
 export async function forceCompact(
   messages: Anthropic.Messages.MessageParam[],
   workspaceRoot?: string,
+  reason = "manual slash command",
 ): Promise<boolean> {
   if (messages.length === 0) return false;
 
-  return compactMessages(messages, "manual slash command", workspaceRoot);
+  return compactMessages(messages, reason, workspaceRoot);
 }

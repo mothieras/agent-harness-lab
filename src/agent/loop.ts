@@ -16,9 +16,16 @@ import type {
   AgentLoopResult,
   AgentLoopStopReason,
 } from "./options.js";
-import { client, MODEL } from "../config.js";
-import { autoCompactIfNeeded, microCompact } from "./contextCompact.js";
+import { client, getFallbackModel, MODEL } from "../config.js";
+import { autoCompactIfNeeded, forceCompact, microCompact } from "./contextCompact.js";
 import type { ToolRuntime } from "../tools/toolRuntime.js";
+import {
+  decideRecovery,
+  initialRecoveryState,
+  CONTINUATION_PROMPT,
+  DEFAULT_MAX_TOKENS,
+} from "./errorRecovery.js";
+import type { LLMOutcome } from "./errorRecovery.js";
 
 export type { AgentLoopOptions, AgentLoopResult, AgentLoopStopReason };
 export {
@@ -29,6 +36,30 @@ export {
 
 function stopContent(text: string): Anthropic.Messages.Message["content"] {
   return [{ type: "text", text, citations: null }];
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function formatRuntimeError(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`;
+  if (typeof error === "object" && error !== null) {
+    const e = error as { code?: unknown; message?: unknown };
+    const code = typeof e.code === "string" ? `${e.code}: ` : "";
+    const message =
+      typeof e.message === "string" ? e.message : JSON.stringify(error);
+    return `${code}${message}`;
+  }
+  return String(error);
+}
+
+function requireSuccessOutcome(
+  outcome: LLMOutcome,
+  actionType: string,
+): Anthropic.Messages.Message | { error: string } {
+  if (outcome.kind === "success") return outcome.response;
+  return {
+    error: `Internal recovery error: action '${actionType}' requires a successful model response.`,
+  };
 }
 
 export async function agentLoop(
@@ -44,6 +75,9 @@ export async function agentLoop(
     ),
   });
   let turns = 0;
+  let recoveryState = initialRecoveryState();
+  let maxTokens = DEFAULT_MAX_TOKENS;
+  let activeModel = MODEL;
 
   try {
     loopOptions.hooks?.trigger("LoopStart", messages);
@@ -64,24 +98,116 @@ export async function agentLoop(
         autoCompactIfNeeded(messages, loopOptions.workspaceRoot),
         loopOptions.deadlineAt,
       );
-      turns += 1;
 
       loopOptions.hooks?.trigger("UserPromptSubmit", messages);
 
-      const response = await awaitWithDeadline(
-        client.messages.create(
-          {
-            model: MODEL as Anthropic.Model,
-            system: loopOptions.system,
-            tools: loopOptions.tools,
-            messages,
-            max_tokens: 8000,
-            stream: false,
-          },
-          anthropicRequestTimeoutOptions(loopOptions.deadlineAt),
-        ),
-        loopOptions.deadlineAt,
+      // ── LLM call — outcome capture for recovery decision ──
+      let outcome: LLMOutcome;
+      try {
+        const response = await awaitWithDeadline(
+          client.messages.create(
+            {
+              model: activeModel as Anthropic.Model,
+              system: loopOptions.system,
+              tools: loopOptions.tools,
+              messages,
+              max_tokens: maxTokens,
+              stream: false,
+            },
+            anthropicRequestTimeoutOptions(loopOptions.deadlineAt),
+          ),
+          loopOptions.deadlineAt,
+        );
+        outcome = { kind: "success", response };
+      } catch (error) {
+        if (isDeadlineError(error, loopOptions.deadlineAt)) return timedOut();
+        outcome = { kind: "error", error };
+      }
+
+      const fallbackModel = getFallbackModel();
+      const action = decideRecovery(
+        outcome,
+        recoveryState,
+        fallbackModel ? { fallbackModel } : {},
       );
+
+      switch (action.type) {
+        case "none": {
+          const response = requireSuccessOutcome(outcome, action.type);
+          if ("error" in response) {
+            return {
+              stopReason: "error",
+              content: stopContent(response.error),
+            };
+          }
+          recoveryState = initialRecoveryState();
+          maxTokens = DEFAULT_MAX_TOKENS;
+          break;
+        }
+        case "retry": {
+          maxTokens = action.maxTokens;
+          recoveryState = action.nextState;
+          continue;
+        }
+        case "continue_with_prompt": {
+          const resp = requireSuccessOutcome(outcome, action.type);
+          if ("error" in resp) {
+            return {
+              stopReason: "error",
+              content: stopContent(resp.error),
+            };
+          }
+          messages.push({ role: "assistant", content: resp.content });
+          messages.push({ role: "user", content: CONTINUATION_PROMPT });
+          recoveryState = action.nextState;
+          continue;
+        }
+        case "compact_and_retry": {
+          try {
+            await awaitWithDeadline(
+              forceCompact(
+                messages,
+                loopOptions.workspaceRoot,
+                "prompt too long recovery",
+              ),
+              loopOptions.deadlineAt,
+            );
+          } catch (error) {
+            if (isDeadlineError(error, loopOptions.deadlineAt)) return timedOut();
+            return {
+              stopReason: "error",
+              content: stopContent(
+                `Compaction failed: ${formatRuntimeError(error)}`,
+              ),
+            };
+          }
+          recoveryState = action.nextState;
+          continue;
+        }
+        case "backoff_and_retry": {
+          if (action.nextModel) activeModel = action.nextModel;
+          await awaitWithDeadline(sleep(action.delayMs), loopOptions.deadlineAt);
+          recoveryState = action.nextState;
+          continue;
+        }
+        case "abort": {
+          return {
+            stopReason: "error",
+            content: stopContent(action.message),
+          };
+        }
+      }
+
+      // Normal path — proceed with successful response
+      const response = requireSuccessOutcome(outcome, "normal_path");
+      if ("error" in response) {
+        return {
+          stopReason: "error",
+          content: stopContent(response.error),
+        };
+      }
+      turns += 1;
+
       messages.push({ role: "assistant", content: response.content });
       if (response.stop_reason !== "tool_use") {
         const forceContinue = loopOptions.hooks?.trigger("Stop", messages);
@@ -135,10 +261,15 @@ export async function agentLoop(
         }
 
         let output: string;
-        output = await awaitWithDeadline(
-          toolRuntime.invokeTool(block.name, block.input),
-          loopOptions.deadlineAt,
-        );
+        try {
+          output = await awaitWithDeadline(
+            toolRuntime.invokeTool(block.name, block.input),
+            loopOptions.deadlineAt,
+          );
+        } catch (error) {
+          if (isDeadlineError(error, loopOptions.deadlineAt)) return timedOut();
+          output = `Error: ${formatRuntimeError(error)}`;
+        }
 
         loopOptions.hooks?.trigger("PostToolUse", block, output);
         results.push({

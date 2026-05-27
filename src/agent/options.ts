@@ -6,7 +6,8 @@ import type { HookBus } from "../hooks/index.js";
 export type AgentLoopStopReason =
   | Anthropic.Messages.Message["stop_reason"]
   | "max_turns"
-  | "timeout";
+  | "timeout"
+  | "error";
 
 export type AgentLoopOptions = {
   maxTurns?: number;

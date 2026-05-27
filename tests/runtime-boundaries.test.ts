@@ -51,6 +51,27 @@ test("ToolRuntime resolves file tools against its workspace root", async () => {
   }
 });
 
+test("ToolRuntime returns handler exceptions as error strings", async () => {
+  const runtime = new ToolRuntime(
+    { getContent: () => "", getDescriptions: () => "" },
+    {
+      write: () => "memory.md",
+      buildIndex: () => "",
+    },
+    process.cwd(),
+  );
+
+  runtime.registerTool("explode", () => {
+    throw new Error("boom");
+  });
+  runtime.registerTool("reject", async () => {
+    throw new Error("async boom");
+  });
+
+  assert.match(await runtime.invokeTool("explode", {}), /Error: boom/);
+  assert.match(await runtime.invokeTool("reject", {}), /Error: async boom/);
+});
+
 test("TeammateManager records failed loops as failed", async () => {
   const manager = new TeammateManager();
   manager.spawn("tester", "qa", "check failure handling");

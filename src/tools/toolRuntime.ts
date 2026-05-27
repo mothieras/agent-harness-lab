@@ -10,6 +10,18 @@ import type { ToolHandler, ToolInput } from "./input.js";
 export { agentIdentity } from "./agentIdentity.js";
 export type { ToolHandler, ToolInput } from "./input.js";
 
+function formatToolError(error: unknown): string {
+  if (error instanceof Error) return `Error: ${error.message}`;
+  if (typeof error === "object" && error !== null) {
+    const e = error as { code?: unknown; message?: unknown };
+    const code = typeof e.code === "string" ? `${e.code}: ` : "";
+    const message =
+      typeof e.message === "string" ? e.message : JSON.stringify(error);
+    return `Error: ${code}${message}`;
+  }
+  return `Error: ${String(error)}`;
+}
+
 export class ToolRuntime {
   private readonly taskManager: TaskManager;
   private readonly bg: BackgroundManager;
@@ -86,6 +98,10 @@ export class ToolRuntime {
     const normalizedInput =
       typeof input === "object" && input !== null ? (input as ToolInput) : {};
 
-    return handler(normalizedInput);
+    try {
+      return await handler(normalizedInput);
+    } catch (error) {
+      return formatToolError(error);
+    }
   }
 }

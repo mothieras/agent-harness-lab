@@ -14,3 +14,7 @@ export const client = new Anthropic({
   ...(baseURL ? { baseURL } : {}),
 });
 
+export function getFallbackModel(): string | undefined {
+  const fallback = process.env.FALLBACK_MODEL_ID?.trim();
+  return fallback ? fallback : undefined;
+}
