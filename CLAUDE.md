@@ -19,28 +19,30 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 
 **Core loop** (`src/agent/loop.ts`):
 1. Sends messages to the model with tools
-2. If stop_reason is `tool_use`, executes each tool via `ToolRuntime.invokeTool()` — all tools including orchestration tools (task, spawn_teammate) are dispatched uniformly; no if-else interception in the loop
-3. If stop_reason is anything else, triggers `Stop` hook (which can force continuation), then returns
-4. Enforces max_turns and timeout via `agent/deadline.ts`
-5. Six hook trigger points: LoopStart, UserPromptSubmit, PreToolUse, PostToolUse, ToolResultsReady, Stop
-6. Subagents use the same `agentLoop()` with restricted tools and fewer turns; orchestration tools are registered at startup via `registerTool()`
-7. Teammates also reuse `agentLoop()` — inbox polling and notification injection are handled by `UserPromptSubmit` hook in `runtimeHooks.ts`
+2. Captures model responses/errors as an `LLMOutcome`, asks `decideRecovery()` for a `RecoveryAction`, then applies that action in the loop
+3. If stop_reason is `tool_use`, executes each tool via `ToolRuntime.invokeTool()` — all tools including orchestration tools (`subagent`, `teammate`) are dispatched uniformly; no if-else interception in the loop
+4. If stop_reason is anything else, triggers `Stop` hook (which can force continuation), then returns
+5. Enforces max_turns and timeout via `agent/deadline.ts`; recovery retries do not consume max_turns
+6. Six hook trigger points: LoopStart, UserPromptSubmit, PreToolUse, PostToolUse, ToolResultsReady, Stop
+7. Subagents use the same `agentLoop()` with restricted tools and fewer turns; orchestration tools are registered at startup via `registerTool()`
+8. Teammates also reuse `agentLoop()` — inbox polling and notification injection are handled by `UserPromptSubmit` hook in `runtimeHooks.ts`
 
 **Hooks** (`src/hooks/index.ts`):
 - Process-local hook bus: `register(event, callback)` + `trigger(event, ...args)` for 6 events
 - Callbacks return `null` to continue, `string` to block (PreToolUse) or force continuation (Stop)
 
 **Agent runtime** (`src/agent/`):
-- `loop.ts` — the main agent loop, 139 lines, no domain logic
+- `loop.ts` — the main agent loop, ~290 lines; LLM call wrapped in outcome capture → `decideRecovery()` → switch on recovery action; tool errors caught per-invocation
+- `errorRecovery.ts` — pure decision function maps `(outcome, state, options)` to `RecoveryAction` union; handles output truncation, context overflow, rate limits, overloads, transient network failures, and fallback-model switching after repeated 529s
 - `deadline.ts` — timeout/deadline utilities (AgentLoopTimeoutError, awaitWithDeadline, throwIfDeadlineExpired)
-- `options.ts` — AgentLoopOptions (4 fields: maxTurns, timeoutMs, allowedTools, system) + normalizeAgentLoopOptions()
-- `subagent.ts` — constrained agentLoop runner for the `task` tool
+- `options.ts` — AgentLoopOptions + normalizeAgentLoopOptions(); `AgentLoopStopReason` includes `"error"` for unrecoverable failures
+- `subagent.ts` — constrained agentLoop runner for the `subagent` tool; inherits error recovery for free
 - `response.ts` — `describeFinalResponse()` for formatting agent output
-- `contextCompact.ts` — micro-compact (per-turn result compression, >30k tokens) + auto-compact (LLM summarization, >50k tokens)
+- `contextCompact.ts` — micro-compact (per-turn result compression, >30k tokens), auto-compact (LLM summarization, >50k tokens), forceCompact (manual/recovery trigger with reason label)
 
 **App wiring** (`src/app/`):
 - `context.ts` — AppContext (DI container): SkillLoader, MemoryManager, ToolRuntime, TeammateManager
-- `orchestrationTools.ts` — registers `task` and `spawn_teammate` as dynamic tools via `toolRuntime.registerTool()`; launches teammate loops
+- `orchestrationTools.ts` — registers `subagent` and `teammate` as dynamic tools via `toolRuntime.registerTool()`; launches teammate loops
 - `runtimeHooks.ts` — registers all business hooks: task status injection, background/teammate notification injection, task reminder state machine (per-agent via AsyncLocalStorage)
 
 **Tools** (`src/tools/`):
@@ -65,7 +67,7 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 - `memoryManager.ts` — cross-session persistent memory (`.memory/*.md`) with index injection, dual write paths (tool + background extraction), and session-exit consolidation
 - `types.ts` — MemoryType, MemoryEntry
 
-**Config** (`src/config.ts`): Reads env vars, initializes Anthropic client, assembles system prompt via `buildSystem()`
+**Config** (`src/config.ts`): Reads env vars, initializes Anthropic client, exports `MODEL`, `client`, and `getFallbackModel()` for error recovery fallback switching
 
 ## API Provider Compatibility
 
