@@ -18,11 +18,7 @@ Use blockedBy to express dependencies between tasks.
 For long-running commands (builds, tests, installs), use background_run instead of bash.
 Do NOT poll background tasks with check_background — results arrive automatically as <background-results> messages and the agent loop will resume on its own. Only use check_background if the user explicitly asks for task status.
 
-You have a team of persistent named agents (teammates). Use teammate to create them — they run their own agent loops in the background.
-Each teammate has a role, an inbox, and can communicate via send_message / read_inbox.
-When a teammate finishes, you'll see <teammate-updates> messages.
-Use list_teammates to view the team roster. Use broadcast to send a message to everyone at once.
-Teammates are persistent — they go idle after finishing and can be re-activated with new tasks.`,
+For delegated review, analysis, or implementation slices, use subagent. Subagents are blocking delegations: wait for the subagent result, then continue the same turn with that result.`,
 
   // session 内不变（技能扫描在构造时完成）
   skills: (ctx) =>

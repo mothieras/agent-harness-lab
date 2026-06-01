@@ -20,11 +20,11 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 **Core loop** (`src/agent/loop.ts`):
 1. Sends messages to the model with tools
 2. If stop_reason is `tool_use`, executes each tool via `ToolRuntime.invokeTool()` and feeds results back as user messages
-3. Orchestration-level tools (`subagent`, `teammate`) are registered dynamically in `src/app/orchestrationTools.ts`
+3. The default orchestration-level tool (`subagent`) is registered dynamically in `src/app/orchestrationTools.ts`
 4. If stop_reason is anything else, triggers the `Stop` hook, then returns the final response
 5. Enforces max_turns and timeout via `src/agent/deadline.ts`
 6. Runtime injections (task status, background results, inbox messages, reminders) live in `src/app/runtimeHooks.ts`
-7. Subagents and teammates reuse `agentLoop()` with restricted toolsets and different system prompts
+7. Subagents reuse `agentLoop()` with restricted toolsets and role/name-specific system prompts; teammate async actors are deferred and not registered by default
 8. `allowedTools` is resolved through centralized tool profiles and fails fast on unknown tool names
 
 **Tools** (`src/tools/`):
@@ -34,18 +34,18 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 - `builtin/` — per-tool builtin factories and file-tool implementations; each tool owns its `definition` and `handler`, while group indexes only aggregate them
 - `mcp/` — MCP-0 provider boundary: minimal `McpClient`, mock client, schema conversion, handler creation, result normalization, and diagnostics
 - `toolRuntime.ts` — runtime state holder for task/background managers; invokes tools by looking handlers up in `ToolRegistry`
-- `toolProfiles.ts` — centralized allowed tool sets for subagent/teammate loops plus profile validation and fail-fast tool-definition selection
+- `toolProfiles.ts` — centralized allowed tool sets for subagent and deferred teammate loops plus profile validation and fail-fast tool-definition selection
 - `input.ts` — shared tool input validation helpers (`requireString`, `requireInteger`, optional parsers)
 - `agentIdentity.ts` — AsyncLocalStorage identity context used by lead, subagents, and teammates
 - File tools (`bash`, `read_file`, `write_file`, `edit_file`) route through `builtin/file/safePath.ts` which resolves symlinks and enforces workspace containment
 - `taskManager.ts` — JSON-file task persistence in `.tasks/` with status transitions (pending→in_progress→completed) and blocking dependencies
 - `backgroundManager.ts` — fire-and-forget shell commands with notification queue, consumed by runtime hooks as `<background-results>`
-- `src/agent/subagent.ts` — constrained `agentLoop` runner used by the `subagent` orchestration tool
+- `src/agent/subagent.ts` — constrained blocking `agentLoop` runner used by the `subagent` orchestration tool
 
 **Agent Teams** (`src/team/`):
 - `teammateManager.ts` — spawn/fire-and-forget teammate lifecycle (working→idle→shutdown), in-memory inbox Map per teammate, notification queue for `<teammate-updates>` injection
 - `types.ts` — TeamMember, TeamMessage; 5 message types declared (message/broadcast/shutdown_request/shutdown_response/plan_approval_response)
-- Teammates share the same `agentLoop()` as the lead, differentiated by `allowedTools`, `system` prompt, and inbox polling via runtime hooks
+- Teammate async actor execution is deferred; current teammate code is retained as manager/inbox primitives, not a default orchestration path
 
 **Skills** (`src/skills/skillLoader.ts`):
 - Two-layer injection: `getDescriptions()` returns a short list for the system prompt; `getContent(name)` returns the full SKILL.md body on tool call

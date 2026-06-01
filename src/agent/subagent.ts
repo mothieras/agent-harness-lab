@@ -12,12 +12,21 @@ import type { ToolRuntime } from "../tools/toolRuntime.js";
 import { SUB_AGENT_ALLOWED_TOOLS } from "../tools/toolProfiles.js";
 
 export type SubAgentOptions = {
+  name?: string;
+  role?: string;
   maxTurns?: number;
   timeoutMs?: number;
   checkPermission?: CheckPermissionFn;
   hooks?: HookBus;
   workspaceRoot?: string;
 };
+
+export function buildSubAgentSystemPrompt(options?: SubAgentOptions): string {
+  const workspace = options?.workspaceRoot ?? process.cwd();
+  const identity = options?.name ? ` named '${options.name}'` : "";
+  const role = options?.role ? ` Your role is: ${options.role}.` : "";
+  return `You are a subagent${identity} at ${workspace}.${role} Complete the assigned task and report back concisely.`;
+}
 
 export async function runSubAgent(
   prompt: string,
@@ -33,9 +42,7 @@ export async function runSubAgent(
     timeoutMs: options?.timeoutMs ?? DEFAULT_SUB_AGENT_TIMEOUT_MS,
     allowedTools: SUB_AGENT_ALLOWED_TOOLS,
     tools: toolRuntime.getToolDefinitions(),
-    system: `You are a subagent at ${
-      options?.workspaceRoot ?? process.cwd()
-    }. Complete the assigned task and report back concisely.`,
+    system: buildSubAgentSystemPrompt(options),
   };
   if (options?.workspaceRoot) {
     loopOptions.workspaceRoot = options.workspaceRoot;

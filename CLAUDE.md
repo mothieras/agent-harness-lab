@@ -20,12 +20,12 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 **Core loop** (`src/agent/loop.ts`):
 1. Sends messages to the model with tools
 2. Captures model responses/errors as an `LLMOutcome`, asks `decideRecovery()` for a `RecoveryAction`, then applies that action in the loop
-3. If stop_reason is `tool_use`, executes each tool via `ToolRuntime.invokeTool()` — all tools including orchestration tools (`subagent`, `teammate`) are dispatched uniformly; no if-else interception in the loop
+3. If stop_reason is `tool_use`, executes each tool via `ToolRuntime.invokeTool()` — all tools including orchestration tools such as `subagent` are dispatched uniformly; no if-else interception in the loop
 4. If stop_reason is anything else, triggers `Stop` hook (which can force continuation), then returns
 5. Enforces max_turns and timeout via `agent/deadline.ts`; recovery retries do not consume max_turns
 6. Six hook trigger points: LoopStart, UserPromptSubmit, PreToolUse, PostToolUse, ToolResultsReady, Stop
-7. Subagents use the same `agentLoop()` with restricted tools and fewer turns; orchestration tools are registered at startup as complete `RegisteredTool` entries
-8. Teammates also reuse `agentLoop()` — inbox polling and notification injection are handled by `UserPromptSubmit` hook in `runtimeHooks.ts`
+7. Subagents use the same `agentLoop()` with restricted tools and fewer turns; the default orchestration path is blocking delegation through `subagent`
+8. Teammate manager/inbox primitives remain available in source for future explicit async actor work, but `teammate` is not registered as a default orchestration tool
 9. `allowedTools` is resolved through centralized tool profiles and fails fast on unknown tool names
 
 **Hooks** (`src/hooks/index.ts`):
@@ -43,7 +43,7 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 
 **App wiring** (`src/app/`):
 - `context.ts` — AppContext (DI container): SkillLoader, MemoryManager, ToolRegistry, ToolRuntime, TeammateManager; loads builtin tools, accepts preloaded provider results, and validates tool profiles at startup
-- `orchestrationTools.ts` — registers `subagent` and `teammate` as complete `RegisteredTool` entries via `toolRuntime.registerTool()`; launches teammate loops
+- `orchestrationTools.ts` — registers `subagent` as a complete `RegisteredTool` entry via `toolRuntime.registerTool()`; teammate orchestration is deferred
 - `runtimeHooks.ts` — registers all business hooks: task status injection, background/teammate notification injection, task reminder state machine (per-agent via AsyncLocalStorage)
 
 **Tools** (`src/tools/`):
@@ -53,7 +53,7 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 - `builtin/` — per-tool builtin factories and file-tool implementations; each tool owns its `definition` and `handler`, while group indexes only aggregate them
 - `mcp/` — MCP-0 provider boundary: minimal `McpClient`, mock client, schema conversion, handler creation, result normalization, and diagnostics
 - `toolRuntime.ts` — runtime state holder for task/background managers; invokes tools by looking handlers up in `ToolRegistry`
-- `toolProfiles.ts` — centralized allowed tool sets for subagent/teammate loops plus profile validation and fail-fast tool-definition selection
+- `toolProfiles.ts` — centralized allowed tool sets for subagent and deferred teammate loops plus profile validation and fail-fast tool-definition selection
 - `input.ts` — shared tool input validation helpers (`requireString`, `requireInteger`, optional parsers)
 - `agentIdentity.ts` — AsyncLocalStorage identity context for lead/subagent/teammate execution
 - File tools (`bash`, `read_file`, `write_file`, `edit_file`) route through `builtin/file/safePath.ts` which resolves symlinks and enforces workspace containment

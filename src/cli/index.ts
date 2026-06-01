@@ -21,6 +21,25 @@ type LeadTurnOptions = {
 	checkPermission: CheckPermissionFn;
 };
 
+export async function safeQuestion(
+	question: (query: string) => Promise<string>,
+	query: string,
+): Promise<string | null> {
+	try {
+		return await question(query);
+	} catch (error) {
+		if (
+			typeof error === "object" &&
+			error !== null &&
+			"code" in error &&
+			(error as { code?: unknown }).code === "ERR_USE_AFTER_CLOSE"
+		) {
+			return null;
+		}
+		throw error;
+	}
+}
+
 function buildPromptContext(app: AppContext): PromptContext {
   return {
     workspace: app.workspaceRoot,
@@ -69,16 +88,23 @@ export async function runCli(): Promise<void> {
   registerOrchestrationTools(app);
 
   const rl = readline.createInterface({ input, output });
+  let closed = false;
+  rl.on("close", () => {
+    closed = true;
+  });
+  const ask = (query: string) => safeQuestion(rl.question.bind(rl), query);
 
-	const askUser: AskUserFn = async (toolName, input_, reason) => {
-		console.log(`\n\x1b[33m⚠  ${reason}\x1b[0m`);
-		console.log(`   Tool: ${toolName}(${JSON.stringify(input_)})`);
-		const choice = await rl.question("   Allow? [y/N] ");
-		return (
-			choice.trim().toLowerCase() === "y" ||
-			choice.trim().toLowerCase() === "yes"
-		);
-	};
+  const askUser: AskUserFn = async (toolName, input_, reason) => {
+    if (closed) return false;
+    console.log(`\n\x1b[33m⚠  ${reason}\x1b[0m`);
+    console.log(`   Tool: ${toolName}(${JSON.stringify(input_)})`);
+    const choice = await ask("   Allow? [y/N] ");
+    if (choice === null) return false;
+    return (
+      choice.trim().toLowerCase() === "y" ||
+      choice.trim().toLowerCase() === "yes"
+    );
+  };
 
   const checkPermission = createPermissionChecker(app.workspaceRoot, askUser);
   app.checkPermission = checkPermission;
@@ -89,8 +115,9 @@ export async function runCli(): Promise<void> {
 
   const history: Anthropic.Messages.MessageParam[] = [];
   try {
-    while (true) {
-      const query = await rl.question("\x1b[36magent >> \x1b[0m");
+    while (!closed) {
+      const query = await ask("\x1b[36magent >> \x1b[0m");
+      if (query === null) break;
       const trimmed = query.trim();
       if (trimmed === "") continue;
       if (trimmed.startsWith("/")) {
@@ -118,7 +145,7 @@ export async function runCli(): Promise<void> {
       await app.memoryManager.consolidate();
     }
     app.toolRuntime.clearTasksIfAllDone();
-    rl.close();
+    if (!closed) rl.close();
   }
 }
 

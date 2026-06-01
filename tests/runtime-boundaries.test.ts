@@ -4,7 +4,14 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HookBus } from "../src/hooks/index.js";
+import type Anthropic from "@anthropic-ai/sdk";
+import { client } from "../src/config.js";
+import { createAppContext } from "../src/app/context.js";
 import { pushTaggedUserMessage } from "../src/app/messageInjection.js";
+import { registerOrchestrationTools } from "../src/app/orchestrationTools.js";
+import { runSubAgent } from "../src/agent/subagent.js";
+import { safeQuestion } from "../src/cli/index.js";
+import { PROMPT_SECTIONS } from "../src/prompt/sections.js";
 import { TeammateManager } from "../src/team/teammateManager.js";
 import { BackgroundManager } from "../src/tools/backgroundManager.js";
 import { agentIdentity } from "../src/tools/agentIdentity.js";
@@ -15,6 +22,33 @@ import { TaskManager } from "../src/tools/taskManager.js";
 import { loadBuiltinTools } from "../src/tools/builtin/provider.js";
 import { validateToolProfiles } from "../src/tools/toolProfiles.js";
 import type { RegisteredTool } from "../src/tools/toolTypes.js";
+
+function toolDefinition(name: string) {
+  return {
+    name,
+    description: `${name} test tool`,
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+    },
+  };
+}
+
+function textResponse(
+  text: string,
+  stopReason: Anthropic.Messages.Message["stop_reason"] = "end_turn",
+): Anthropic.Messages.Message {
+  return {
+    id: "msg_test",
+    type: "message",
+    role: "assistant",
+    model: "test-model",
+    content: [{ type: "text", text, citations: null }],
+    stop_reason: stopReason,
+    stop_sequence: null,
+    usage: { input_tokens: 1, output_tokens: 1 },
+  };
+}
 
 function createRuntime(workspaceRoot: string): ToolRuntime {
   const registry = new ToolRegistry();
@@ -292,6 +326,115 @@ test("TeammateManager records failed loops as failed", async () => {
 
   assert.match(manager.listAll(), /tester \(qa\): failed/);
   assert.match(manager.drainNotifications() ?? "", /failed: boom/);
+});
+
+test("TeammateManager rejects duplicate working teammate names", () => {
+  const manager = new TeammateManager();
+
+  assert.match(manager.spawn("reviewer", "code reviewer", "review docs"), /Spawned/);
+  assert.equal(
+    manager.spawn("reviewer", "tester", "run tests"),
+    "Error: 'reviewer' is currently working. Wait or spawn someone else.",
+  );
+  assert.match(manager.listAll(), /reviewer \(code reviewer\): working/);
+});
+
+test("TeammateManager records resolved loops as idle", async () => {
+  const manager = new TeammateManager();
+  manager.spawn("tester", "qa", "check success handling");
+
+  manager.registerLoop("tester", Promise.resolve());
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.match(manager.listAll(), /tester \(qa\): idle/);
+  assert.match(manager.drainNotifications() ?? "", /finished and is now idle/);
+});
+
+test("default orchestration exposes subagent but not teammate", async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
+  try {
+    const app = createAppContext(workspace);
+    registerOrchestrationTools(app);
+
+    const toolNames = app.toolRegistry.getDefinitions().map((tool) => tool.name);
+
+    assert.ok(toolNames.includes("subagent"));
+    assert.ok(!toolNames.includes("teammate"));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("subagent schema accepts optional role and name", async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
+  try {
+    const app = createAppContext(workspace);
+    registerOrchestrationTools(app);
+    const subagent = app.toolRegistry
+      .getDefinitions()
+      .find((tool) => tool.name === "subagent");
+
+    assert.ok(subagent);
+    assert.deepEqual(
+      Object.keys(subagent.input_schema.properties ?? {}).sort(),
+      ["max_turns", "name", "prompt", "role", "timeout_ms"],
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("runSubAgent includes optional role and name in system prompt", async () => {
+  const originalCreate = client.messages.create;
+  let observedSystem: Anthropic.Messages.MessageCreateParams["system"];
+  const tools = ["bash", "read_file", "write_file", "edit_file", "load_skill"].map(
+    toolDefinition,
+  );
+  const runtime = {
+    getToolDefinitions: () => tools,
+    invokeTool: async () => "",
+  };
+
+  client.messages.create = (async (params: Anthropic.Messages.MessageCreateParams) => {
+    observedSystem = params.system;
+    return textResponse("review complete");
+  }) as typeof client.messages.create;
+
+  try {
+    const result = await runSubAgent("review docs", runtime as never, {
+      workspaceRoot: "/tmp/workspace",
+      name: "reviewer",
+      role: "code reviewer",
+    });
+
+    assert.match(result, /review complete/);
+    assert.match(String(observedSystem), /reviewer/);
+    assert.match(String(observedSystem), /code reviewer/);
+    assert.match(String(observedSystem), /\/tmp\/workspace/);
+  } finally {
+    client.messages.create = originalCreate;
+  }
+});
+
+test("safeQuestion returns null when readline has already closed", async () => {
+  const question = async () => {
+    const error = new Error("readline was closed") as Error & { code: string };
+    error.code = "ERR_USE_AFTER_CLOSE";
+    throw error;
+  };
+
+  assert.equal(await safeQuestion(question, "agent >> "), null);
+});
+
+test("default prompt guides delegation through subagent instead of teammate", () => {
+  const guidelines = PROMPT_SECTIONS.guidelines({
+    workspace: "/tmp/workspace",
+    memories: "",
+    skills: "",
+  });
+
+  assert.match(guidelines ?? "", /subagent/);
+  assert.doesNotMatch(guidelines ?? "", /Use teammate/);
 });
 
 test("agent identity is available outside the tool runtime dispatcher", () => {
