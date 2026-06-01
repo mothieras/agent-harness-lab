@@ -15,7 +15,7 @@ pnpm start            # Run compiled output
 
 This is a minimal coding-agent runtime harness — it builds the core loop (model ↔ tools) from scratch so every piece is visible. It's **not a framework**; it's deliberately thin.
 
-**Entry point:** `src/main.ts` → `src/cli/index.ts` readline loop → `src/agent/loop.ts`
+**Entry point:** `src/main.ts` → `src/cli/index.ts` readline loop → `src/app/context.ts` app assembly → `src/agent/loop.ts`
 
 **Core loop** (`src/agent/loop.ts`):
 1. Sends messages to the model with tools
@@ -24,8 +24,9 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 4. If stop_reason is anything else, triggers `Stop` hook (which can force continuation), then returns
 5. Enforces max_turns and timeout via `agent/deadline.ts`; recovery retries do not consume max_turns
 6. Six hook trigger points: LoopStart, UserPromptSubmit, PreToolUse, PostToolUse, ToolResultsReady, Stop
-7. Subagents use the same `agentLoop()` with restricted tools and fewer turns; orchestration tools are registered at startup via `registerTool()`
+7. Subagents use the same `agentLoop()` with restricted tools and fewer turns; orchestration tools are registered at startup as complete `RegisteredTool` entries
 8. Teammates also reuse `agentLoop()` — inbox polling and notification injection are handled by `UserPromptSubmit` hook in `runtimeHooks.ts`
+9. `allowedTools` is resolved through centralized tool profiles and fails fast on unknown tool names
 
 **Hooks** (`src/hooks/index.ts`):
 - Process-local hook bus: `register(event, callback)` + `trigger(event, ...args)` for 6 events
@@ -41,17 +42,21 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 - `contextCompact.ts` — micro-compact (per-turn result compression, >30k tokens), auto-compact (LLM summarization, >50k tokens), forceCompact (manual/recovery trigger with reason label)
 
 **App wiring** (`src/app/`):
-- `context.ts` — AppContext (DI container): SkillLoader, MemoryManager, ToolRuntime, TeammateManager
-- `orchestrationTools.ts` — registers `subagent` and `teammate` as dynamic tools via `toolRuntime.registerTool()`; launches teammate loops
+- `context.ts` — AppContext (DI container): SkillLoader, MemoryManager, ToolRegistry, ToolRuntime, TeammateManager; loads builtin tools, accepts preloaded provider results, and validates tool profiles at startup
+- `orchestrationTools.ts` — registers `subagent` and `teammate` as complete `RegisteredTool` entries via `toolRuntime.registerTool()`; launches teammate loops
 - `runtimeHooks.ts` — registers all business hooks: task status injection, background/teammate notification injection, task reminder state machine (per-agent via AsyncLocalStorage)
 
 **Tools** (`src/tools/`):
-- `toolDefinitions.ts` — Anthropic tool schemas (what the model sees); `allowedTools` filters per agent role
-- `toolRuntime.ts` — thin dispatcher/runtime state holder with `registerTool()` for dynamic tool registration
-- `toolHandlers.ts` — built-in tool implementations grouped by concern: file, skill, task, background, team, memory
+- `toolTypes.ts` — shared tool contracts: `RegisteredTool`, `ToolDefinition`, provider diagnostics, and source metadata
+- `toolRegistry.ts` — single runtime source of truth for tool definitions, handlers, and provider diagnostics
+- `builtin/provider.ts` — app-startup loader that returns builtin `RegisteredTool[]`
+- `builtin/` — per-tool builtin factories and file-tool implementations; each tool owns its `definition` and `handler`, while group indexes only aggregate them
+- `mcp/` — MCP-0 provider boundary: minimal `McpClient`, mock client, schema conversion, handler creation, result normalization, and diagnostics
+- `toolRuntime.ts` — runtime state holder for task/background managers; invokes tools by looking handlers up in `ToolRegistry`
+- `toolProfiles.ts` — centralized allowed tool sets for subagent/teammate loops plus profile validation and fail-fast tool-definition selection
 - `input.ts` — shared tool input validation helpers (`requireString`, `requireInteger`, optional parsers)
 - `agentIdentity.ts` — AsyncLocalStorage identity context for lead/subagent/teammate execution
-- File tools (`bash`, `read_file`, `write_file`, `edit_file`) route through `safePath.ts` which resolves symlinks and enforces workspace containment
+- File tools (`bash`, `read_file`, `write_file`, `edit_file`) route through `builtin/file/safePath.ts` which resolves symlinks and enforces workspace containment
 - `taskManager.ts` — JSON-file task persistence in `.tasks/` with status transitions (pending→in_progress→completed) and blocking dependencies
 - `backgroundManager.ts` — fire-and-forget shell commands with notification queue
 

@@ -1,15 +1,6 @@
 import type { TeamMember, TeamMessage } from "./types.js";
 import { VALID_MSG_TYPES } from "./types.js";
 
-export const TEAMMATE_ALLOWED_TOOLS = [
-  "bash",
-  "read_file",
-  "write_file",
-  "edit_file",
-  "send_message",
-  "read_inbox",
-];
-
 export class TeammateManager {
   private readonly members = new Map<string, TeamMember>();
   private readonly inboxes = new Map<string, TeamMessage[]>();

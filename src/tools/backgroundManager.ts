@@ -1,6 +1,6 @@
 import { exec } from "node:child_process";
 import crypto from "node:crypto";
-import { isDangerousCommand } from "./bashTool.js";
+import { isDangerousCommand } from "./shellSafety.js";
 
 type BgStatus = "running" | "completed" | "timeout" | "error";
 

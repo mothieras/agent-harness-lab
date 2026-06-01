@@ -15,27 +15,32 @@ pnpm start            # Run compiled output
 
 This is a minimal coding-agent runtime harness — it builds the core loop (model ↔ tools) from scratch so every piece is visible. It's **not a framework**; it's deliberately thin.
 
-**Entry point:** `src/main.ts` → `src/cli/index.ts` readline loop → `src/agent/loop.ts`
+**Entry point:** `src/main.ts` → `src/cli/index.ts` readline loop → `src/app/context.ts` app assembly → `src/agent/loop.ts`
 
 **Core loop** (`src/agent/loop.ts`):
 1. Sends messages to the model with tools
 2. If stop_reason is `tool_use`, executes each tool via `ToolRuntime.invokeTool()` and feeds results back as user messages
-3. Orchestration-level tools (`task`, `spawn_teammate`) are registered dynamically in `src/app/orchestrationTools.ts`
+3. Orchestration-level tools (`subagent`, `teammate`) are registered dynamically in `src/app/orchestrationTools.ts`
 4. If stop_reason is anything else, triggers the `Stop` hook, then returns the final response
 5. Enforces max_turns and timeout via `src/agent/deadline.ts`
 6. Runtime injections (task status, background results, inbox messages, reminders) live in `src/app/runtimeHooks.ts`
 7. Subagents and teammates reuse `agentLoop()` with restricted toolsets and different system prompts
+8. `allowedTools` is resolved through centralized tool profiles and fails fast on unknown tool names
 
 **Tools** (`src/tools/`):
-- `toolDefinitions.ts` — Anthropic tool schemas (what the model sees). 18 tools total; `allowedTools` filters per agent role
-- `toolRuntime.ts` — thin dispatcher and runtime state holder; owns task/background managers and dynamic tool registration
-- `toolHandlers.ts` — built-in tool implementations grouped by concern: file, skill, task, background, team, memory
+- `toolTypes.ts` — shared tool contracts: `RegisteredTool`, `ToolDefinition`, provider diagnostics, and source metadata
+- `toolRegistry.ts` — registry and single runtime source of truth for tool definitions, handlers, and provider diagnostics
+- `builtin/provider.ts` — app-startup loader that returns builtin `RegisteredTool[]`
+- `builtin/` — per-tool builtin factories and file-tool implementations; each tool owns its `definition` and `handler`, while group indexes only aggregate them
+- `mcp/` — MCP-0 provider boundary: minimal `McpClient`, mock client, schema conversion, handler creation, result normalization, and diagnostics
+- `toolRuntime.ts` — runtime state holder for task/background managers; invokes tools by looking handlers up in `ToolRegistry`
+- `toolProfiles.ts` — centralized allowed tool sets for subagent/teammate loops plus profile validation and fail-fast tool-definition selection
 - `input.ts` — shared tool input validation helpers (`requireString`, `requireInteger`, optional parsers)
 - `agentIdentity.ts` — AsyncLocalStorage identity context used by lead, subagents, and teammates
-- File tools (`bash`, `read_file`, `write_file`, `edit_file`) all route through `safePath.ts` which resolves symlinks and enforces workspace containment
+- File tools (`bash`, `read_file`, `write_file`, `edit_file`) route through `builtin/file/safePath.ts` which resolves symlinks and enforces workspace containment
 - `taskManager.ts` — JSON-file task persistence in `.tasks/` with status transitions (pending→in_progress→completed) and blocking dependencies
 - `backgroundManager.ts` — fire-and-forget shell commands with notification queue, consumed by runtime hooks as `<background-results>`
-- `src/agent/subagent.ts` — constrained `agentLoop` runner used by the `task` tool
+- `src/agent/subagent.ts` — constrained `agentLoop` runner used by the `subagent` orchestration tool
 
 **Agent Teams** (`src/team/`):
 - `teammateManager.ts` — spawn/fire-and-forget teammate lifecycle (working→idle→shutdown), in-memory inbox Map per teammate, notification queue for `<teammate-updates>` injection
@@ -51,7 +56,7 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 - **Micro-compact** (per-turn, >30k estimated tokens): clears old tool results, preserving the last 8 and any `read_file` results
 - **Auto-compact** (per-turn, >50k tokens): sends older messages to a summarizer model, saves full transcript to `.transcripts/`, replaces history with summary + recent messages
 
-**Config** (`src/config.ts`): Reads env vars and initializes the Anthropic client. Stateful services are assembled in `src/app/context.ts`.
+**Config** (`src/config.ts`): Reads env vars and initializes the Anthropic client. Stateful services and the tool registry are assembled in `src/app/context.ts`.
 
 ## API Provider Compatibility
 

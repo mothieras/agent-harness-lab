@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { formatError } from "./formatError.js";
+import { formatError } from "../../formatError.js";
 import { safePath } from "./safePath.js";
 
 export async function runWriteFile(

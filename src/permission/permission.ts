@@ -5,7 +5,7 @@ import type { AskUserFn, CheckPermissionFn } from "./types.js";
 //
 // This is a best-effort safety guardrail, NOT a security boundary.
 // Shell syntax has too many equivalent forms for string-matching to be a real
-// defense. File operations are protected by safePath.ts; bash commands are
+// defense. File operations are protected by builtin/file/safePath.ts; bash commands are
 // ultimately limited by the user's OS permissions and shell configuration.
 //
 // Treat this list as a "don't shoot yourself in the foot" reminder, not a

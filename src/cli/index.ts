@@ -84,9 +84,7 @@ export async function runCli(): Promise<void> {
   app.checkPermission = checkPermission;
   registerRuntimeHooks(app);
   app.hooks.register("PostToolUse", (block, output) => {
-    const b = block as { name: string; input: Record<string, unknown> };
-    logToolResult(b.name, b.input, output as string);
-    return null;
+    logToolResult(block.name, block.input as Record<string, unknown>, output);
   });
 
   const history: Anthropic.Messages.MessageParam[] = [];
@@ -132,6 +130,7 @@ async function runLeadTurn(options: LeadTurnOptions): Promise<void> {
 			workspaceRoot: app.workspaceRoot,
 			checkPermission,
 			hooks: app.hooks,
+			tools: app.toolRegistry.getDefinitions(),
 		}),
 	);
 	console.log(describeFinalResponse(result.content, result.stopReason));

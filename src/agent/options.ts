@@ -1,7 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { getTools } from "../tools/index.js";
 import type { CheckPermissionFn } from "../permission/types.js";
 import type { HookBus } from "../hooks/index.js";
+import type { ToolDefinition } from "../tools/toolTypes.js";
+import { selectAllowedToolDefinitions } from "../tools/toolProfiles.js";
 
 export type AgentLoopStopReason =
   | Anthropic.Messages.Message["stop_reason"]
@@ -12,7 +13,8 @@ export type AgentLoopStopReason =
 export type AgentLoopOptions = {
   maxTurns?: number;
   timeoutMs?: number;
-  allowedTools?: string[];
+  allowedTools?: readonly string[];
+  tools?: ToolDefinition[];
   /** System prompt. Prefer {@link buildSystemPrompt} from prompt/assembler; this fallback is bare-bones. */
   system?: string;
   workspaceRoot?: string;
@@ -31,7 +33,7 @@ export type NormalizedAgentLoopOptions = {
   deadlineAt: number | undefined;
   workspaceRoot: string;
   system: string;
-  tools: ReturnType<typeof getTools>;
+  tools: ToolDefinition[];
   checkPermission: AgentLoopOptions["checkPermission"];
   hooks: HookBus | undefined;
 };
@@ -64,9 +66,8 @@ export function normalizeAgentLoopOptions(
   const deadlineAt =
     timeoutMs === undefined ? undefined : Date.now() + timeoutMs;
   const allowedTools = options?.allowedTools;
-  const tools = allowedTools
-    ? getTools().filter((tool) => allowedTools.includes(tool.name))
-    : getTools();
+  const availableTools = options?.tools ?? [];
+  const tools = selectAllowedToolDefinitions(availableTools, allowedTools);
 
   return {
     maxTurns,

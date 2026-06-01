@@ -1,56 +1,41 @@
-import path from "node:path";
-import type { MemoryManager } from "../memory/memoryManager.js";
-import type { SkillLoader } from "../skills/skillLoader.js";
-import type { TeammateManager } from "../team/teammateManager.js";
-import { BackgroundManager } from "./backgroundManager.js";
-import { TaskManager } from "./taskManager.js";
-import { createBuiltinToolHandlers } from "./toolHandlers.js";
-import type { ToolHandler, ToolInput } from "./input.js";
+import type { BackgroundManager } from "./backgroundManager.js";
+import type { TaskManager } from "./taskManager.js";
+import type { ToolInput } from "./input.js";
+import {
+  formatToolExecutionError,
+  formatUnavailableTool,
+  formatUnsupportedTool,
+} from "./toolErrors.js";
+import type { ToolRegistry } from "./toolRegistry.js";
+import type { RegisteredTool, ToolDefinition } from "./toolTypes.js";
 
 export { agentIdentity } from "./agentIdentity.js";
 export type { ToolHandler, ToolInput } from "./input.js";
+export type { RegisteredTool, ToolDefinition } from "./toolTypes.js";
 
-function formatToolError(error: unknown): string {
-  if (error instanceof Error) return `Error: ${error.message}`;
-  if (typeof error === "object" && error !== null) {
-    const e = error as { code?: unknown; message?: unknown };
-    const code = typeof e.code === "string" ? `${e.code}: ` : "";
-    const message =
-      typeof e.message === "string" ? e.message : JSON.stringify(error);
-    return `Error: ${code}${message}`;
-  }
-  return `Error: ${String(error)}`;
-}
+type ToolRuntimeDeps = {
+  taskManager: TaskManager;
+  backgroundManager: BackgroundManager;
+  registry: ToolRegistry;
+};
 
 export class ToolRuntime {
   private readonly taskManager: TaskManager;
   private readonly bg: BackgroundManager;
-  private readonly handlers: Record<string, ToolHandler>;
-  private teammateManager: TeammateManager | null = null;
+  private readonly registry: ToolRegistry;
 
-  constructor(
-    skillLoader: SkillLoader,
-    memoryManager: MemoryManager,
-    workspaceRoot: string,
-  ) {
-    this.taskManager = new TaskManager(path.join(workspaceRoot, ".tasks"));
-    this.bg = new BackgroundManager(workspaceRoot);
-    this.handlers = createBuiltinToolHandlers({
-      workspaceRoot,
-      skillLoader,
-      memoryManager,
-      taskManager: this.taskManager,
-      backgroundManager: this.bg,
-      getTeammateManager: () => this.teammateManager,
-    });
+  constructor(deps: ToolRuntimeDeps) {
+    this.taskManager = deps.taskManager;
+    this.bg = deps.backgroundManager;
+    this.registry = deps.registry;
   }
 
-  setTeammateManager(tm: TeammateManager): void {
-    this.teammateManager = tm;
+  registerTool(tool: RegisteredTool): void {
+    this.registry.register(tool);
   }
 
-  registerTool(name: string, handler: ToolHandler): void {
-    this.handlers[name] = handler;
+  getToolDefinitions(allowedTools?: readonly string[]): ToolDefinition[] {
+    return this.registry.getDefinitions(allowedTools);
   }
 
   clearTasksIfAllDone(): boolean {
@@ -90,9 +75,11 @@ export class ToolRuntime {
   }
 
   async invokeTool(name: string, input: unknown): Promise<string> {
-    const handler = this.handlers[name];
+    const handler = this.registry.getHandler(name);
     if (!handler) {
-      return `Error: Unsupported tool '${name}'.`;
+      const diagnostic = this.registry.explainUnavailable(name);
+      if (diagnostic) return formatUnavailableTool(name, diagnostic);
+      return formatUnsupportedTool(name);
     }
 
     const normalizedInput =
@@ -101,7 +88,7 @@ export class ToolRuntime {
     try {
       return await handler(normalizedInput);
     } catch (error) {
-      return formatToolError(error);
+      return formatToolExecutionError(error);
     }
   }
 }

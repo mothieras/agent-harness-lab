@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { formatError } from "./formatError.js";
+import { formatError } from "../../formatError.js";
 import { safePath } from "./safePath.js";
 
 const MAX_OUTPUT_CHARS = 50_000;

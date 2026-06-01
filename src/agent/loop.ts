@@ -16,6 +16,7 @@ import type {
   AgentLoopResult,
   AgentLoopStopReason,
 } from "./options.js";
+import type { ToolResultReadyBlock } from "../hooks/index.js";
 import { client, getFallbackModel, MODEL } from "../config.js";
 import { autoCompactIfNeeded, forceCompact, microCompact } from "./contextCompact.js";
 import type { ToolRuntime } from "../tools/toolRuntime.js";
@@ -67,7 +68,10 @@ export async function agentLoop(
   toolRuntime: ToolRuntime,
   options?: AgentLoopOptions,
 ): Promise<AgentLoopResult> {
-  const loopOptions = normalizeAgentLoopOptions(options);
+  const loopOptions = normalizeAgentLoopOptions({
+    ...options,
+    tools: options?.tools ?? toolRuntime.getToolDefinitions(),
+  });
   const timedOut = () => ({
     stopReason: "timeout" as const,
     content: stopContent(
@@ -80,7 +84,7 @@ export async function agentLoop(
   let activeModel = MODEL;
 
   try {
-    loopOptions.hooks?.trigger("LoopStart", messages);
+    loopOptions.hooks?.emitEffect("LoopStart", messages);
 
     while (true) {
       if (turns >= loopOptions.maxTurns) {
@@ -99,7 +103,7 @@ export async function agentLoop(
         loopOptions.deadlineAt,
       );
 
-      loopOptions.hooks?.trigger("UserPromptSubmit", messages);
+      loopOptions.hooks?.emitEffect("UserPromptSubmit", messages);
 
       // ── LLM call — outcome capture for recovery decision ──
       let outcome: LLMOutcome;
@@ -210,7 +214,7 @@ export async function agentLoop(
 
       messages.push({ role: "assistant", content: response.content });
       if (response.stop_reason !== "tool_use") {
-        const forceContinue = loopOptions.hooks?.trigger("Stop", messages);
+        const forceContinue = loopOptions.hooks?.triggerControl("Stop", messages);
         if (forceContinue) {
           messages.push({ role: "user", content: forceContinue });
           continue;
@@ -218,10 +222,7 @@ export async function agentLoop(
         return { stopReason: response.stop_reason, content: response.content };
       }
 
-      const results: Array<
-        | { type: "tool_result"; tool_use_id: string; content: string }
-        | { type: "text"; text: string }
-      > = [];
+      const results: ToolResultReadyBlock[] = [];
       for (const block of response.content) {
         if (block.type !== "tool_use") continue;
         throwIfDeadlineExpired(loopOptions.deadlineAt);
@@ -230,7 +231,7 @@ export async function agentLoop(
         // skipping permission), then the optional permission pipeline (deny list →
         // rule matching → user approval). A PreToolUse hook that blocks bypasses
         // permission — useful for administrative blocks, not user prompts.
-        const blocked = loopOptions.hooks?.trigger("PreToolUse", block);
+        const blocked = loopOptions.hooks?.triggerControl("PreToolUse", block);
         if (blocked) {
           results.push({
             type: "tool_result",
@@ -271,7 +272,7 @@ export async function agentLoop(
           output = `Error: ${formatRuntimeError(error)}`;
         }
 
-        loopOptions.hooks?.trigger("PostToolUse", block, output);
+        loopOptions.hooks?.emitEffect("PostToolUse", block, output);
         results.push({
           type: "tool_result",
           tool_use_id: block.id,
@@ -279,10 +280,7 @@ export async function agentLoop(
         });
       }
 
-      const extraResult = loopOptions.hooks?.trigger("ToolResultsReady", results);
-      if (extraResult) {
-        results.push({ type: "text", text: extraResult });
-      }
+      loopOptions.hooks?.emitEffect("ToolResultsReady", results);
       messages.push({ role: "user", content: results });
     }
   } catch (error) {

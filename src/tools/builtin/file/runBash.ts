@@ -1,4 +1,5 @@
 import { exec } from "node:child_process";
+import { isDangerousCommand } from "../../shellSafety.js";
 
 type ExecErrorWithOutput = Error & {
   code?: number | string;
@@ -27,12 +28,6 @@ function execAsync(
       },
     );
   });
-}
-
-const DANGEROUS = ["rm -rf /", "sudo", "shutdown", "reboot", "> /dev/"];
-
-export function isDangerousCommand(command: string): boolean {
-  return DANGEROUS.some((pattern) => command.includes(pattern));
 }
 
 export async function runBash(

@@ -2,10 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { AppContext } from "./context.js";
 import { pushTaggedUserMessage } from "./messageInjection.js";
 import { agentIdentity } from "../tools/agentIdentity.js";
-
-type ToolResultBlock =
-  | { type: "tool_result"; tool_use_id: string; content: string }
-  | { type: "text"; text: string };
+import type { ToolResultReadyBlock } from "../hooks/index.js";
 
 type TaskLoopState = {
 	roundsSinceTaskUpdate: number;
@@ -33,26 +30,21 @@ export function registerRuntimeHooks(app: AppContext): void {
 
 	app.hooks.register("LoopStart", () => {
 		taskStates.set(agentName(), newTaskLoopState());
-		return null;
 	});
 
-	app.hooks.register("UserPromptSubmit", (rawMessages) => {
-		const messages = rawMessages as Anthropic.Messages.MessageParam[];
+	app.hooks.register("UserPromptSubmit", (messages) => {
 		injectTaskStatus(app, taskState(), messages);
 		injectBackgroundResults(app, messages);
 		injectInboxMessages(app, messages);
 		injectLeadTeammateUpdates(app, messages);
-		return null;
 	});
 
 	app.hooks.register("PostToolUse", (block) => {
 		markTaskToolUse(taskState(), block);
-		return null;
 	});
 
-	app.hooks.register("ToolResultsReady", (rawResults) => {
-		appendTaskReminder(app, taskState(), rawResults as ToolResultBlock[]);
-		return null;
+	app.hooks.register("ToolResultsReady", (results) => {
+		appendTaskReminder(app, taskState(), results);
 	});
 }
 
@@ -109,9 +101,11 @@ function injectLeadTeammateUpdates(
 	pushTaggedUserMessage(messages, "teammate-updates", teammateUpdates);
 }
 
-function markTaskToolUse(state: TaskLoopState, block: unknown): void {
-	const toolUse = block as { name: string };
-	if (toolUse.name !== "task_create" && toolUse.name !== "task_update") return;
+function markTaskToolUse(
+	state: TaskLoopState,
+	block: Anthropic.Messages.ToolUseBlock,
+): void {
+	if (block.name !== "task_create" && block.name !== "task_update") return;
 	state.sawTaskTool = true;
 	state.sawTaskToolThisTurn = true;
 	state.showTaskStatus = true;
@@ -120,7 +114,7 @@ function markTaskToolUse(state: TaskLoopState, block: unknown): void {
 function appendTaskReminder(
 	app: AppContext,
 	state: TaskLoopState,
-	results: ToolResultBlock[],
+	results: ToolResultReadyBlock[],
 ): void {
 	if (!shouldRemindTaskUpdate(app, state)) return;
 	results.push({

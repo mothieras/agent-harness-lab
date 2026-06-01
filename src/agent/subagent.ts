@@ -9,6 +9,7 @@ import { describeFinalResponse } from "./response.js";
 import type { HookBus } from "../hooks/index.js";
 import type { CheckPermissionFn } from "../permission/types.js";
 import type { ToolRuntime } from "../tools/toolRuntime.js";
+import { SUB_AGENT_ALLOWED_TOOLS } from "../tools/toolProfiles.js";
 
 export type SubAgentOptions = {
   maxTurns?: number;
@@ -17,15 +18,6 @@ export type SubAgentOptions = {
   hooks?: HookBus;
   workspaceRoot?: string;
 };
-
-const SUB_AGENT_ALLOWED_TOOLS = [
-  "bash",
-  "read_file",
-  "write_file",
-  "edit_file",
-  "load_skill",
-];
-
 
 export async function runSubAgent(
   prompt: string,
@@ -40,6 +32,7 @@ export async function runSubAgent(
     maxTurns: options?.maxTurns ?? DEFAULT_SUB_AGENT_MAX_TURNS,
     timeoutMs: options?.timeoutMs ?? DEFAULT_SUB_AGENT_TIMEOUT_MS,
     allowedTools: SUB_AGENT_ALLOWED_TOOLS,
+    tools: toolRuntime.getToolDefinitions(),
     system: `You are a subagent at ${
       options?.workspaceRoot ?? process.cwd()
     }. Complete the assigned task and report back concisely.`,

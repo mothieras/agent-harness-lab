@@ -13,6 +13,7 @@ import {
   retryDelay,
 } from "../src/agent/errorRecovery.js";
 import { agentLoop } from "../src/agent/loop.js";
+import type { ToolDefinition } from "../src/tools/toolTypes.js";
 
 function textResponse(
   text: string,
@@ -27,6 +28,22 @@ function textResponse(
     stop_reason: stopReason,
     stop_sequence: null,
     usage: { input_tokens: 1, output_tokens: 1 },
+  };
+}
+
+const emptyRuntime = {
+  getToolDefinitions: () => [],
+  invokeTool: async () => "",
+};
+
+function toolDefinition(name: string): ToolDefinition {
+  return {
+    name,
+    description: `${name} test tool`,
+    input_schema: {
+      type: "object",
+      properties: {},
+    },
   };
 }
 
@@ -174,10 +191,11 @@ test("agentLoop resets max_tokens after successful recovery", async () => {
   try {
     const result = await agentLoop(
       [{ role: "user", content: "hello" }],
-      {} as never,
+      emptyRuntime as never,
       {
         hooks: {
-          trigger(event: string) {
+          emitEffect() {},
+          triggerControl(event: string) {
             if (event !== "Stop") return null;
             stopHookCalls += 1;
             return stopHookCalls === 1 ? "continue once" : null;
@@ -212,7 +230,7 @@ test("agentLoop retries transient network errors without consuming turns", async
   try {
     const result = await agentLoop(
       [{ role: "user", content: "hello" }],
-      {} as never,
+      emptyRuntime as never,
       { maxTurns: 1 },
     );
 
@@ -244,7 +262,7 @@ test("agentLoop uses fallback model after three consecutive overloads", async ()
   try {
     const result = await agentLoop(
       [{ role: "user", content: "hello" }],
-      {} as never,
+      emptyRuntime as never,
     );
 
     assert.equal(result.stopReason, "end_turn");
@@ -288,7 +306,7 @@ test("agentLoop returns an error result when reactive compaction fails", async (
   try {
     const result = await agentLoop(
       [{ role: "user", content: "hello" }],
-      {} as never,
+      emptyRuntime as never,
       { workspaceRoot: workspace },
     );
 
@@ -301,6 +319,50 @@ test("agentLoop returns an error result when reactive compaction fails", async (
     client.messages.create = originalCreate;
     await rm(workspace, { recursive: true, force: true });
   }
+});
+
+test("agentLoop falls back to runtime tool definitions when options omit tools", async () => {
+  const originalCreate = client.messages.create;
+  const fallbackTool = toolDefinition("fallback_tool");
+  let observedTools: Anthropic.Messages.MessageCreateParams["tools"];
+
+  client.messages.create = (async (params: Anthropic.Messages.MessageCreateParams) => {
+    observedTools = params.tools;
+    return textResponse("done", "end_turn");
+  }) as typeof client.messages.create;
+
+  const runtime = {
+    getToolDefinitions: () => [fallbackTool],
+    invokeTool: async () => "",
+  };
+
+  try {
+    const result = await agentLoop(
+      [{ role: "user", content: "hello" }],
+      runtime as never,
+    );
+
+    assert.equal(result.stopReason, "end_turn");
+    assert.deepEqual(observedTools!, [fallbackTool]);
+  } finally {
+    client.messages.create = originalCreate;
+  }
+});
+
+test("agentLoop rejects unknown allowed tools instead of silently filtering", async () => {
+  const fallbackTool = toolDefinition("fallback_tool");
+  const runtime = {
+    getToolDefinitions: () => [fallbackTool],
+    invokeTool: async () => "",
+  };
+
+  await assert.rejects(
+    () =>
+      agentLoop([{ role: "user", content: "hello" }], runtime as never, {
+        allowedTools: ["fallback_tool", "missing_tool"],
+      }),
+    /Unknown allowed tool\(s\): missing_tool/,
+  );
 });
 
 test("agentLoop returns thrown tool errors as tool_result content", async () => {
@@ -328,6 +390,7 @@ test("agentLoop returns thrown tool errors as tool_result content", async () => 
   }) as typeof client.messages.create;
 
   const toolRuntime = {
+    getToolDefinitions: () => [],
     invokeTool: async () => {
       throw new Error("tool blew up");
     },

@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { formatError } from "./formatError.js";
+import { formatError } from "../../formatError.js";
 import { safePath } from "./safePath.js";
 
 export async function runEditFile(
