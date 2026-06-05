@@ -1,9 +1,15 @@
 ## Agent Harness Lab
 
-A TypeScript learning harness for building coding-agent runtime pieces step by step,
-following the [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code) tutorial series.
+A from-scratch, framework-free coding-agent runtime in TypeScript (~2200 lines) — the
+model↔tools core loop built up piece by piece so every runtime concern (tool dispatch,
+permission gating, subagent delegation, context compaction, error recovery) stays visible
+in code rather than buried inside a framework.
 
-The project is intentionally small so each harness concern stays visible in code.
+Started from the Python implementation in the
+[shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code) tutorial,
+then substantially rewritten and extended into a modular TypeScript runtime — multi-agent
+delegation, two-layer context compaction, skill loading, and the permission pipeline were
+added independently.
 
 ## What's Built
 
@@ -49,11 +55,3 @@ The project is intentionally small so each harness concern stays visible in code
 - `docs/architecture/tool-system.md` — `RegisteredTool`, providers, registry/runtime, builtin factories, and MCP-0 mock provider boundaries
 - `docs/architecture/hook-system.md` — effect hooks, control hooks, event semantics, and hook invariants
 - `docs/decisions/` — short ADR-style notes for the main architecture decisions
-
-## Pre-merge Checklist
-
-- [ ] **Reusability** — Would this still work if called from a CLI/test/doc-gen?
-- [ ] **Lifecycle** — Do these pieces of state change at the same frequency?
-- [ ] **Concern type** — Business logic, or crosscutting (logging/metrics/cache)?
-- [ ] **Path weight** — Hot path (per call) or cold path (once at startup)?
-- [ ] **Falsifiable** — Is the choice based on objective criteria, not "I prefer"?
