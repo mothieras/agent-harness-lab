@@ -9,6 +9,7 @@ import { client } from "../src/config.js";
 import { createAppContext } from "../src/app/context.js";
 import { pushTaggedUserMessage } from "../src/app/messageInjection.js";
 import { registerOrchestrationTools } from "../src/app/orchestrationTools.js";
+import { registerRuntimeHooks } from "../src/app/runtimeHooks.js";
 import { runSubAgent } from "../src/agent/subagent.js";
 import { safeQuestion } from "../src/cli/index.js";
 import { PROMPT_SECTIONS } from "../src/prompt/sections.js";
@@ -493,4 +494,40 @@ test("pushTaggedUserMessage appends xml-like user blocks consistently", () => {
     { role: "user", content: "<task-status>\none\ntwo\n</task-status>" },
     { role: "user", content: "<inbox>{\"text\":\"hi\"}</inbox>" },
   ]);
+});
+
+test("subagent results inject in lead context only, not in subagent context", async () => {
+  const original = client.messages.create;
+  client.messages.create = (async () =>
+    textResponse("sub result payload")) as typeof client.messages.create;
+  const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
+  try {
+    const app = createAppContext(workspace);
+    registerOrchestrationTools(app);
+    registerRuntimeHooks(app);
+
+    agentIdentity.run("lead", () => app.subAgentRunner.run("do thing"));
+    while (app.subAgentRunner.hasRunning()) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    // Non-lead context must NOT drain the lead's subagent results.
+    const subMessages: Anthropic.Messages.MessageParam[] = [];
+    agentIdentity.run("worker-1", () =>
+      app.hooks.emitEffect("UserPromptSubmit", subMessages),
+    );
+    assert.doesNotMatch(JSON.stringify(subMessages), /subagent-results/);
+
+    // Lead context drains and injects the (still-present) result.
+    const leadMessages: Anthropic.Messages.MessageParam[] = [];
+    agentIdentity.run("lead", () =>
+      app.hooks.emitEffect("UserPromptSubmit", leadMessages),
+    );
+    const leadText = JSON.stringify(leadMessages);
+    assert.match(leadText, /subagent-results/);
+    assert.match(leadText, /sub result payload/);
+  } finally {
+    client.messages.create = original;
+    await rm(workspace, { recursive: true, force: true });
+  }
 });

@@ -35,6 +35,7 @@ export function registerRuntimeHooks(app: AppContext): void {
 	app.hooks.register("UserPromptSubmit", (messages) => {
 		injectTaskStatus(app, taskState(), messages);
 		injectBackgroundResults(app, messages);
+		injectSubagentResults(app, messages);
 		injectInboxMessages(app, messages);
 		injectLeadTeammateUpdates(app, messages);
 	});
@@ -77,9 +78,26 @@ function injectBackgroundResults(
 	app: AppContext,
 	messages: Anthropic.Messages.MessageParam[],
 ): void {
+	if (agentName() !== "lead") return;
 	const backgroundResults = app.toolRuntime.drainBackgroundNotifications();
 	if (!backgroundResults) return;
 	pushTaggedUserMessage(messages, "background-results", backgroundResults);
+}
+
+function injectSubagentResults(
+	app: AppContext,
+	messages: Anthropic.Messages.MessageParam[],
+): void {
+	if (agentName() !== "lead") return;
+	const notifs = app.subAgentRunner.drainNotifications();
+	if (notifs.length === 0) return;
+	const text = notifs
+		.map((n) => {
+			const task = n.taskId ? ` (task ${n.taskId})` : "";
+			return `[sub:${n.subId}]${task} ${n.status}: ${n.result}`;
+		})
+		.join("\n\n");
+	pushTaggedUserMessage(messages, "subagent-results", text);
 }
 
 function injectInboxMessages(
