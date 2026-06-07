@@ -455,7 +455,7 @@ test("safeQuestion returns null when readline has already closed", async () => {
   assert.equal(await safeQuestion(question, "agent >> "), null);
 });
 
-test("default prompt guides delegation through subagent instead of teammate", () => {
+test("default prompt guides parallel subagent delegation", () => {
   const guidelines = PROMPT_SECTIONS.guidelines({
     workspace: "/tmp/workspace",
     memories: "",
@@ -463,6 +463,8 @@ test("default prompt guides delegation through subagent instead of teammate", ()
   });
 
   assert.match(guidelines ?? "", /subagent/);
+  assert.match(guidelines ?? "", /check_subagent/);
+  assert.match(guidelines ?? "", /in_progress/);
   assert.doesNotMatch(guidelines ?? "", /Use teammate/);
 });
 
