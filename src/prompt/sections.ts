@@ -18,8 +18,7 @@ Use blockedBy to express dependencies between tasks.
 For long-running commands (builds, tests, installs), use background_run instead of bash.
 Do NOT poll background tasks with check_background — results arrive automatically as <background-results> messages and the agent loop will resume on its own. Only use check_background if the user explicitly asks for task status.
 
-For delegated review, analysis, or implementation slices, use subagent. Subagents are blocking delegations: wait for the subagent result, then continue the same turn with that result.
-For independent work, spawn async subagents with \`subagent\` and keep going — they run concurrently. Poll with \`check_subagent\` or just end your turn; results are delivered back automatically. When a subagent works on a tracked task, mark that task \`in_progress\` (task_update) before spawning so you do not dispatch it twice.`,
+For delegated review, analysis, or implementation slices, use subagent. Subagents are asynchronous: subagent returns a sub_id immediately and runs concurrently while you keep working — spawn several for independent work to run them in parallel. Results arrive automatically as <subagent-results> messages, so do NOT poll; keep working and they appear on your next turn, or end your turn and you will be re-woken when they finish. Only use \`check_subagent\` if you explicitly want a mid-flight status. When a subagent works on a tracked task, mark that task \`in_progress\` (task_update) before spawning so you do not dispatch it twice.`,
 
   // session 内不变（技能扫描在构造时完成）
   skills: (ctx) =>
