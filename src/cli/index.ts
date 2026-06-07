@@ -5,7 +5,6 @@ import { agentLoop, describeFinalResponse } from "../agent/index.js";
 import { forceCompact } from "../agent/contextCompact.js";
 import { createAppContext } from "../app/context.js";
 import type { AppContext } from "../app/context.js";
-import { registerOrchestrationTools } from "../app/orchestrationTools.js";
 import { registerRuntimeHooks } from "../app/runtimeHooks.js";
 import { buildSystemPrompt } from "../prompt/assembler.js";
 import type { PromptContext } from "../prompt/assembler.js";
@@ -89,10 +88,6 @@ async function handleSlashCommand(
 }
 
 export async function runCli(): Promise<void> {
-  const app = createAppContext(process.cwd());
-  const system = buildSystemPrompt(buildPromptContext(app));
-  registerOrchestrationTools(app);
-
   const rl = readline.createInterface({ input, output });
   let closed = false;
   rl.on("close", () => {
@@ -112,8 +107,9 @@ export async function runCli(): Promise<void> {
     );
   };
 
-  const checkPermission = createPermissionChecker(app.workspaceRoot, askUser);
-  app.checkPermission = checkPermission;
+  const checkPermission = createPermissionChecker(process.cwd(), askUser);
+  const app = createAppContext(process.cwd(), { checkPermission });
+  const system = buildSystemPrompt(buildPromptContext(app));
   registerRuntimeHooks(app);
   app.hooks.register("PostToolUse", (block, output) => {
     logToolResult(block.name, block.input as Record<string, unknown>, output);

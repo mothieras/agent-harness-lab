@@ -8,9 +8,9 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { client } from "../src/config.js";
 import { createAppContext } from "../src/app/context.js";
 import { pushTaggedUserMessage } from "../src/app/messageInjection.js";
-import { registerOrchestrationTools } from "../src/app/orchestrationTools.js";
 import { registerRuntimeHooks } from "../src/app/runtimeHooks.js";
 import { runSubAgent } from "../src/agent/subagent.js";
+import { SubAgentRunner } from "../src/agent/subAgentRunner.js";
 import { hasPendingAsyncWork, safeQuestion } from "../src/cli/index.js";
 import { PROMPT_SECTIONS } from "../src/prompt/sections.js";
 import { BackgroundManager } from "../src/tools/backgroundManager.js";
@@ -54,6 +54,8 @@ function createRuntime(workspaceRoot: string): ToolRuntime {
   const registry = new ToolRegistry();
   const taskManager = new TaskManager(path.join(workspaceRoot, ".tasks"));
   const backgroundManager = new BackgroundManager(workspaceRoot);
+  const runtime = new ToolRuntime({ taskManager, backgroundManager, registry });
+  const subAgentRunner = new SubAgentRunner(runtime, new HookBus(), workspaceRoot);
   const builtin = loadBuiltinTools({
     workspaceRoot,
     skillLoader: { getContent: () => "", getDescriptions: () => "" },
@@ -63,15 +65,12 @@ function createRuntime(workspaceRoot: string): ToolRuntime {
     },
     taskManager,
     backgroundManager,
+    subAgentRunner,
   });
   registry.registerMany(builtin.tools);
   registry.recordDiagnostics(builtin.diagnostics);
 
-  return new ToolRuntime({
-    taskManager,
-    backgroundManager,
-    registry,
-  });
+  return runtime;
 }
 
 function testTool(name: string, handler: RegisteredTool["handler"]): RegisteredTool {
@@ -95,6 +94,9 @@ test("loadBuiltinTools returns complete RegisteredTool entries", async () => {
   try {
     const taskManager = new TaskManager(path.join(workspace, ".tasks"));
     const backgroundManager = new BackgroundManager(workspace);
+    const registry = new ToolRegistry();
+    const runtime = new ToolRuntime({ taskManager, backgroundManager, registry });
+    const subAgentRunner = new SubAgentRunner(runtime, new HookBus(), workspace);
     const builtin = loadBuiltinTools({
       workspaceRoot: workspace,
       skillLoader: { getContent: () => "", getDescriptions: () => "" },
@@ -104,6 +106,7 @@ test("loadBuiltinTools returns complete RegisteredTool entries", async () => {
       },
       taskManager,
       backgroundManager,
+      subAgentRunner,
     });
 
     assert.deepEqual(builtin.diagnostics, []);
@@ -118,9 +121,11 @@ test("loadBuiltinTools returns complete RegisteredTool entries", async () => {
         "task_get",
         "task_update",
         "task_list",
-        "load_skill",
         "background_run",
         "check_background",
+        "subagent",
+        "check_subagent",
+        "load_skill",
         "update_memory",
       ],
     );
@@ -313,7 +318,6 @@ test("default orchestration exposes subagent and check_subagent but not teammate
   const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
   try {
     const app = createAppContext(workspace);
-    registerOrchestrationTools(app);
 
     const toolNames = app.toolRegistry.getDefinitions().map((tool) => tool.name);
 
@@ -329,7 +333,6 @@ test("subagent schema accepts optional role, name, and task_id", async () => {
   const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
   try {
     const app = createAppContext(workspace);
-    registerOrchestrationTools(app);
     const subagent = app.toolRegistry
       .getDefinitions()
       .find((tool) => tool.name === "subagent");
@@ -351,7 +354,6 @@ test("subagent tool returns a sub_id immediately and check_subagent reports it",
   const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
   try {
     const app = createAppContext(workspace);
-    registerOrchestrationTools(app);
 
     const out = await agentIdentity.run("lead", () =>
       app.toolRuntime.invokeTool("subagent", { prompt: "research X" }),
@@ -463,7 +465,6 @@ test("subagent results inject in lead context only, not in subagent context", as
   const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
   try {
     const app = createAppContext(workspace);
-    registerOrchestrationTools(app);
     registerRuntimeHooks(app);
 
     agentIdentity.run("lead", () => app.subAgentRunner.run("do thing"));
@@ -499,7 +500,6 @@ test("hasPendingAsyncWork reflects running subagents", async () => {
   const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
   try {
     const app = createAppContext(workspace);
-    registerOrchestrationTools(app);
 
     assert.equal(hasPendingAsyncWork(app), false);
     agentIdentity.run("lead", () => app.subAgentRunner.run("work"));

@@ -16,7 +16,6 @@ import { SubAgentRunner } from "../agent/subAgentRunner.js";
 export interface AppContext {
   workspaceRoot: string;
   hooks: HookBus;
-  checkPermission?: CheckPermissionFn;
   skillLoader: SkillLoader;
   memoryManager: MemoryManager;
   toolRegistry: ToolRegistry;
@@ -25,6 +24,7 @@ export interface AppContext {
 }
 
 export type CreateAppContextOptions = {
+  checkPermission?: CheckPermissionFn;
   toolProviderResults?: ToolProviderLoadResult[];
 };
 
@@ -42,12 +42,22 @@ export function createAppContext(
   const taskManager = new TaskManager(path.join(workspaceRoot, ".tasks"));
   const backgroundManager = new BackgroundManager(workspaceRoot);
   const toolRegistry = new ToolRegistry();
+  const toolRuntime = new ToolRuntime({
+    taskManager,
+    backgroundManager,
+    registry: toolRegistry,
+  });
+  const subAgentRunner = new SubAgentRunner(toolRuntime, hooks, workspaceRoot);
   const builtinTools = loadBuiltinTools({
     workspaceRoot,
     skillLoader,
     memoryManager,
     taskManager,
     backgroundManager,
+    subAgentRunner,
+    ...(options.checkPermission
+      ? { checkPermission: options.checkPermission }
+      : {}),
   });
   toolRegistry.registerMany(builtinTools.tools);
   toolRegistry.recordDiagnostics(builtinTools.diagnostics);
@@ -56,12 +66,6 @@ export function createAppContext(
     toolRegistry.recordDiagnostics(providerResult.diagnostics);
   }
   validateToolProfiles(toolRegistry);
-  const toolRuntime = new ToolRuntime({
-    taskManager,
-    backgroundManager,
-    registry: toolRegistry,
-  });
-  const subAgentRunner = new SubAgentRunner(toolRuntime, hooks, workspaceRoot);
   return {
     workspaceRoot,
     hooks,
