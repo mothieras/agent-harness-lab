@@ -350,7 +350,7 @@ test("TeammateManager records resolved loops as idle", async () => {
   assert.match(manager.drainNotifications() ?? "", /finished and is now idle/);
 });
 
-test("default orchestration exposes subagent but not teammate", async () => {
+test("default orchestration exposes subagent and check_subagent but not teammate", async () => {
   const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
   try {
     const app = createAppContext(workspace);
@@ -359,13 +359,14 @@ test("default orchestration exposes subagent but not teammate", async () => {
     const toolNames = app.toolRegistry.getDefinitions().map((tool) => tool.name);
 
     assert.ok(toolNames.includes("subagent"));
+    assert.ok(toolNames.includes("check_subagent"));
     assert.ok(!toolNames.includes("teammate"));
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }
 });
 
-test("subagent schema accepts optional role and name", async () => {
+test("subagent schema accepts optional role, name, and task_id", async () => {
   const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
   try {
     const app = createAppContext(workspace);
@@ -377,9 +378,36 @@ test("subagent schema accepts optional role and name", async () => {
     assert.ok(subagent);
     assert.deepEqual(
       Object.keys(subagent.input_schema.properties ?? {}).sort(),
-      ["max_turns", "name", "prompt", "role", "timeout_ms"],
+      ["max_turns", "name", "prompt", "role", "task_id", "timeout_ms"],
     );
   } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("subagent tool returns a sub_id immediately and check_subagent reports it", async () => {
+  const original = client.messages.create;
+  client.messages.create = (async () =>
+    textResponse("subagent done")) as typeof client.messages.create;
+  const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
+  try {
+    const app = createAppContext(workspace);
+    registerOrchestrationTools(app);
+
+    const out = await agentIdentity.run("lead", () =>
+      app.toolRuntime.invokeTool("subagent", { prompt: "research X" }),
+    );
+    assert.match(out, /Subagent \w+ started/);
+    assert.equal(app.subAgentRunner.hasRunning(), true);
+
+    const list = await app.toolRuntime.invokeTool("check_subagent", {});
+    assert.match(list, /running/);
+
+    while (app.subAgentRunner.hasRunning()) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  } finally {
+    client.messages.create = original;
     await rm(workspace, { recursive: true, force: true });
   }
 });
