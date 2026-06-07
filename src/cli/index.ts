@@ -21,6 +21,12 @@ type LeadTurnOptions = {
 	checkPermission: CheckPermissionFn;
 };
 
+export function hasPendingAsyncWork(app: AppContext): boolean {
+	return (
+		app.toolRuntime.hasRunningBackgroundTasks() || app.subAgentRunner.hasRunning()
+	);
+}
+
 export async function safeQuestion(
 	question: (query: string) => Promise<string>,
 	query: string,
@@ -132,11 +138,11 @@ export async function runCli(): Promise<void> {
       history.push({ role: "user", content: query });
       await runLeadTurn({ app, history, system, checkPermission });
 
-      // Auto-wake: if background tasks are still running, wait for them
-      while (app.toolRuntime.hasRunningBackgroundTasks()) {
-        const result = await waitForBackgroundTasks(app);
+      // Auto-wake: if background tasks or subagents are still running, wait for them
+      while (hasPendingAsyncWork(app)) {
+        const result = await waitForAsyncWork(app);
         if (result === "interrupted") break;
-        console.log("[background tasks completed, resuming]");
+        console.log("[async work completed, resuming]");
         await runLeadTurn({ app, history, system, checkPermission });
       }
     }
@@ -166,17 +172,17 @@ async function runLeadTurn(options: LeadTurnOptions): Promise<void> {
 	void app.memoryManager.extract(history);
 }
 
-async function waitForBackgroundTasks(
+async function waitForAsyncWork(
 	app: AppContext,
 ): Promise<"completed" | "interrupted"> {
-	console.log("Waiting for background tasks... (Ctrl+C to skip)");
+	console.log("Waiting for background work... (Ctrl+C to skip)");
 	let interrupted = false;
 	const onSigint = () => {
 		interrupted = true;
 	};
 	process.on("SIGINT", onSigint);
 
-	while (app.toolRuntime.hasRunningBackgroundTasks() && !interrupted) {
+	while (hasPendingAsyncWork(app) && !interrupted) {
 		await new Promise((resolve) => setTimeout(resolve, 500));
 	}
 

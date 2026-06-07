@@ -11,7 +11,7 @@ import { pushTaggedUserMessage } from "../src/app/messageInjection.js";
 import { registerOrchestrationTools } from "../src/app/orchestrationTools.js";
 import { registerRuntimeHooks } from "../src/app/runtimeHooks.js";
 import { runSubAgent } from "../src/agent/subagent.js";
-import { safeQuestion } from "../src/cli/index.js";
+import { hasPendingAsyncWork, safeQuestion } from "../src/cli/index.js";
 import { PROMPT_SECTIONS } from "../src/prompt/sections.js";
 import { TeammateManager } from "../src/team/teammateManager.js";
 import { BackgroundManager } from "../src/tools/backgroundManager.js";
@@ -526,6 +526,29 @@ test("subagent results inject in lead context only, not in subagent context", as
     const leadText = JSON.stringify(leadMessages);
     assert.match(leadText, /subagent-results/);
     assert.match(leadText, /sub result payload/);
+  } finally {
+    client.messages.create = original;
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("hasPendingAsyncWork reflects running subagents", async () => {
+  const original = client.messages.create;
+  client.messages.create = (async () =>
+    textResponse("done")) as typeof client.messages.create;
+  const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
+  try {
+    const app = createAppContext(workspace);
+    registerOrchestrationTools(app);
+
+    assert.equal(hasPendingAsyncWork(app), false);
+    agentIdentity.run("lead", () => app.subAgentRunner.run("work"));
+    assert.equal(hasPendingAsyncWork(app), true);
+
+    while (app.subAgentRunner.hasRunning()) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(hasPendingAsyncWork(app), false);
   } finally {
     client.messages.create = original;
     await rm(workspace, { recursive: true, force: true });
