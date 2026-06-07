@@ -4,7 +4,6 @@ import { HookBus } from "../hooks/index.js";
 import { MemoryManager } from "../memory/memoryManager.js";
 import type { CheckPermissionFn } from "../permission/types.js";
 import { SkillLoader } from "../skills/skillLoader.js";
-import { TeammateManager } from "../team/teammateManager.js";
 import { BackgroundManager } from "../tools/backgroundManager.js";
 import { loadBuiltinTools } from "../tools/builtin/provider.js";
 import { TaskManager } from "../tools/taskManager.js";
@@ -22,7 +21,6 @@ export interface AppContext {
   memoryManager: MemoryManager;
   toolRegistry: ToolRegistry;
   toolRuntime: ToolRuntime;
-  teammateManager: TeammateManager;
   subAgentRunner: SubAgentRunner;
 }
 
@@ -41,7 +39,6 @@ export function createAppContext(
     client,
     MODEL!,
   );
-  const teammateManager = new TeammateManager();
   const taskManager = new TaskManager(path.join(workspaceRoot, ".tasks"));
   const backgroundManager = new BackgroundManager(workspaceRoot);
   const toolRegistry = new ToolRegistry();
@@ -51,7 +48,6 @@ export function createAppContext(
     memoryManager,
     taskManager,
     backgroundManager,
-    getTeammateManager: () => teammateManager,
   });
   toolRegistry.registerMany(builtinTools.tools);
   toolRegistry.recordDiagnostics(builtinTools.diagnostics);
@@ -73,7 +69,6 @@ export function createAppContext(
     memoryManager,
     toolRegistry,
     toolRuntime,
-    teammateManager,
     subAgentRunner,
   };
 }

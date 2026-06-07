@@ -27,10 +27,6 @@ test("builtin provider aggregates per-tool factories instead of a central handle
     "skill/loadSkillTool.ts",
     "background/backgroundRunTool.ts",
     "background/checkBackgroundTool.ts",
-    "team/listTeammatesTool.ts",
-    "team/sendMessageTool.ts",
-    "team/readInboxTool.ts",
-    "team/broadcastTool.ts",
     "memory/updateMemoryTool.ts",
   ];
 

@@ -4,7 +4,6 @@ import { createFileTools } from "./file/index.js";
 import { createMemoryTools } from "./memory/index.js";
 import { createSkillTools } from "./skill/index.js";
 import { createTaskTools } from "./task/index.js";
-import { createTeamTools } from "./team/index.js";
 import type { BuiltinToolDeps } from "./types.js";
 
 export type { BuiltinToolDeps } from "./types.js";
@@ -15,7 +14,6 @@ export function createBuiltinTools(deps: BuiltinToolDeps): RegisteredTool[] {
     ...createTaskTools(deps),
     ...createSkillTools(deps),
     ...createBackgroundTools(deps),
-    ...createTeamTools(deps),
     ...createMemoryTools(deps),
   ];
 }

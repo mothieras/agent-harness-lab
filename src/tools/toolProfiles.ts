@@ -1,16 +1,14 @@
 import type { ToolRegistry } from "./toolRegistry.js";
 import type { ToolDefinition } from "./toolTypes.js";
 
-export type ToolProfileName = "subagent" | "teammate";
+export type ToolProfileName = "subagent";
 export type ToolProfiles = Record<string, readonly string[]>;
 
 export const TOOL_PROFILES = {
   subagent: ["bash", "read_file", "write_file", "edit_file", "load_skill"],
-  teammate: ["bash", "read_file", "write_file", "edit_file", "send_message", "read_inbox"],
 } as const satisfies Record<ToolProfileName, readonly string[]>;
 
 export const SUB_AGENT_ALLOWED_TOOLS = TOOL_PROFILES.subagent;
-export const TEAMMATE_ALLOWED_TOOLS = TOOL_PROFILES.teammate;
 
 export function selectAllowedToolDefinitions(
   definitions: readonly ToolDefinition[],

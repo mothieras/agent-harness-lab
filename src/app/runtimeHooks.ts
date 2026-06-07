@@ -36,8 +36,6 @@ export function registerRuntimeHooks(app: AppContext): void {
 		injectTaskStatus(app, taskState(), messages);
 		injectBackgroundResults(app, messages);
 		injectSubagentResults(app, messages);
-		injectInboxMessages(app, messages);
-		injectLeadTeammateUpdates(app, messages);
 	});
 
 	app.hooks.register("PostToolUse", (block) => {
@@ -98,25 +96,6 @@ function injectSubagentResults(
 		})
 		.join("\n\n");
 	pushTaggedUserMessage(messages, "subagent-results", text);
-}
-
-function injectInboxMessages(
-	app: AppContext,
-	messages: Anthropic.Messages.MessageParam[],
-): void {
-	for (const msg of app.teammateManager.drainInbox(agentName())) {
-		pushTaggedUserMessage(messages, "inbox", JSON.stringify(msg), "inline");
-	}
-}
-
-function injectLeadTeammateUpdates(
-	app: AppContext,
-	messages: Anthropic.Messages.MessageParam[],
-): void {
-	if (agentName() !== "lead") return;
-	const teammateUpdates = app.teammateManager.drainNotifications();
-	if (!teammateUpdates) return;
-	pushTaggedUserMessage(messages, "teammate-updates", teammateUpdates);
 }
 
 function markTaskToolUse(

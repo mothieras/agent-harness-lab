@@ -13,7 +13,6 @@ import { registerRuntimeHooks } from "../src/app/runtimeHooks.js";
 import { runSubAgent } from "../src/agent/subagent.js";
 import { hasPendingAsyncWork, safeQuestion } from "../src/cli/index.js";
 import { PROMPT_SECTIONS } from "../src/prompt/sections.js";
-import { TeammateManager } from "../src/team/teammateManager.js";
 import { BackgroundManager } from "../src/tools/backgroundManager.js";
 import { agentIdentity } from "../src/tools/agentIdentity.js";
 import { requireNonEmptyString } from "../src/tools/input.js";
@@ -55,7 +54,6 @@ function createRuntime(workspaceRoot: string): ToolRuntime {
   const registry = new ToolRegistry();
   const taskManager = new TaskManager(path.join(workspaceRoot, ".tasks"));
   const backgroundManager = new BackgroundManager(workspaceRoot);
-  const teammateManager = new TeammateManager();
   const builtin = loadBuiltinTools({
     workspaceRoot,
     skillLoader: { getContent: () => "", getDescriptions: () => "" },
@@ -65,7 +63,6 @@ function createRuntime(workspaceRoot: string): ToolRuntime {
     },
     taskManager,
     backgroundManager,
-    getTeammateManager: () => teammateManager,
   });
   registry.registerMany(builtin.tools);
   registry.recordDiagnostics(builtin.diagnostics);
@@ -98,7 +95,6 @@ test("loadBuiltinTools returns complete RegisteredTool entries", async () => {
   try {
     const taskManager = new TaskManager(path.join(workspace, ".tasks"));
     const backgroundManager = new BackgroundManager(workspace);
-    const teammateManager = new TeammateManager();
     const builtin = loadBuiltinTools({
       workspaceRoot: workspace,
       skillLoader: { getContent: () => "", getDescriptions: () => "" },
@@ -108,7 +104,6 @@ test("loadBuiltinTools returns complete RegisteredTool entries", async () => {
       },
       taskManager,
       backgroundManager,
-      getTeammateManager: () => teammateManager,
     });
 
     assert.deepEqual(builtin.diagnostics, []);
@@ -126,10 +121,6 @@ test("loadBuiltinTools returns complete RegisteredTool entries", async () => {
         "load_skill",
         "background_run",
         "check_background",
-        "list_teammates",
-        "send_message",
-        "read_inbox",
-        "broadcast",
         "update_memory",
       ],
     );
@@ -316,39 +307,6 @@ test("ToolRuntime returns unavailable for failed provider namespaces", async () 
     await runtime.invokeTool("mcp__github__search", {}),
     "Error: Tool 'mcp__github__search' is unavailable from provider 'github': connection failed.",
   );
-});
-
-test("TeammateManager records failed loops as failed", async () => {
-  const manager = new TeammateManager();
-  manager.spawn("tester", "qa", "check failure handling");
-
-  manager.registerLoop("tester", Promise.reject(new Error("boom")));
-  await new Promise((resolve) => setImmediate(resolve));
-
-  assert.match(manager.listAll(), /tester \(qa\): failed/);
-  assert.match(manager.drainNotifications() ?? "", /failed: boom/);
-});
-
-test("TeammateManager rejects duplicate working teammate names", () => {
-  const manager = new TeammateManager();
-
-  assert.match(manager.spawn("reviewer", "code reviewer", "review docs"), /Spawned/);
-  assert.equal(
-    manager.spawn("reviewer", "tester", "run tests"),
-    "Error: 'reviewer' is currently working. Wait or spawn someone else.",
-  );
-  assert.match(manager.listAll(), /reviewer \(code reviewer\): working/);
-});
-
-test("TeammateManager records resolved loops as idle", async () => {
-  const manager = new TeammateManager();
-  manager.spawn("tester", "qa", "check success handling");
-
-  manager.registerLoop("tester", Promise.resolve());
-  await new Promise((resolve) => setImmediate(resolve));
-
-  assert.match(manager.listAll(), /tester \(qa\): idle/);
-  assert.match(manager.drainNotifications() ?? "", /finished and is now idle/);
 });
 
 test("default orchestration exposes subagent and check_subagent but not teammate", async () => {
