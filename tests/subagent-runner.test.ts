@@ -2,11 +2,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type Anthropic from "@anthropic-ai/sdk";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { client } from "../src/config.js";
 import { HookBus } from "../src/hooks/index.js";
 import { agentIdentity } from "../src/tools/agentIdentity.js";
 import { SubAgentRunner } from "../src/agent/subAgentRunner.js";
 import type { ToolRuntime } from "../src/tools/toolRuntime.js";
+import { createAppContext } from "../src/app/context.js";
 
 function textResponse(text: string): Anthropic.Messages.Message {
   return {
@@ -147,5 +151,17 @@ test("check() with no id lists all subagents", async () => {
     await waitUntilSettled(runner);
   } finally {
     client.messages.create = original;
+  }
+});
+
+test("createAppContext exposes an idle SubAgentRunner", async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), "subrunner-"));
+  try {
+    const app = createAppContext(workspace);
+    assert.ok(app.subAgentRunner instanceof SubAgentRunner);
+    assert.equal(app.subAgentRunner.hasRunning(), false);
+    assert.equal(app.subAgentRunner.check(), "No subagents.");
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
   }
 });

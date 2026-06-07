@@ -12,6 +12,7 @@ import { ToolRegistry } from "../tools/toolRegistry.js";
 import { ToolRuntime } from "../tools/toolRuntime.js";
 import { validateToolProfiles } from "../tools/toolProfiles.js";
 import type { ToolProviderLoadResult } from "../tools/toolTypes.js";
+import { SubAgentRunner } from "../agent/subAgentRunner.js";
 
 export interface AppContext {
   workspaceRoot: string;
@@ -22,6 +23,7 @@ export interface AppContext {
   toolRegistry: ToolRegistry;
   toolRuntime: ToolRuntime;
   teammateManager: TeammateManager;
+  subAgentRunner: SubAgentRunner;
 }
 
 export type CreateAppContextOptions = {
@@ -63,6 +65,7 @@ export function createAppContext(
     backgroundManager,
     registry: toolRegistry,
   });
+  const subAgentRunner = new SubAgentRunner(toolRuntime, hooks, workspaceRoot);
   return {
     workspaceRoot,
     hooks,
@@ -71,5 +74,6 @@ export function createAppContext(
     toolRegistry,
     toolRuntime,
     teammateManager,
+    subAgentRunner,
   };
 }
