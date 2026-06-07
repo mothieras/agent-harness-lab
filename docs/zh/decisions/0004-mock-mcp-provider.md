@@ -1,6 +1,6 @@
-1|# 0004: Mock MCP Provider 边界
-2|
-3|> 本文档由 0004-mock-mcp-provider.md 翻译，英文版为准。
+> 本文档由 docs/decisions/0004-mock-mcp-provider.md 翻译，英文版为准。
+
+# 0004: Mock MCP Provider 边界
 4|
 5|## 状态
 6|

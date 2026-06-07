@@ -41,9 +41,9 @@
 41|
 42|## 架构文档
 43|
-44|- `docs/architecture/runtime-flow.md` —— 启动路径、循环职责和错误边界
-45|- `docs/architecture/tool-system.md` —— `RegisteredTool`、提供者、注册表/运行时、内置工厂和 MCP-0 模拟提供者边界
-46|- `docs/architecture/hook-system.md` —— 效应 Hook、控制 Hook、事件语义和 Hook 不变量
-47|- `docs/architecture/limitations-and-roadmap.md` —— 已知结构性限制和优先后续步骤
-48|- `docs/decisions/` —— 主要架构决策的简短 ADR 风格笔记
+- `docs/zh/architecture/runtime-flow.md` —— 启动路径、循环职责和错误边界
+- `docs/zh/architecture/tool-system.md` —— `RegisteredTool`、提供者、注册表/运行时、内置工厂和 MCP-0 模拟提供者边界
+- `docs/zh/architecture/hook-system.md` —— 效应 Hook、控制 Hook、事件语义和 Hook 不变量
+- `docs/zh/architecture/limitations-and-roadmap.md` —— 已知结构性限制和优先后续步骤
+- `docs/zh/decisions/` —— 主要架构决策的简短 ADR 风格笔记
 49|
