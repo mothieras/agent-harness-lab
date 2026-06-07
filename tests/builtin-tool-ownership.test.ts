@@ -4,38 +4,39 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 const toolsRoot = path.join(process.cwd(), "src", "tools");
-const builtinRoot = path.join(toolsRoot, "builtin");
 
-test("builtin provider aggregates per-tool factories instead of a central handler file", async () => {
-  const providerSource = await readFile(
-    path.join(builtinRoot, "provider.ts"),
+test("builtins aggregates per-tool factories instead of a central handler file", async () => {
+  const builtinsSource = await readFile(
+    path.join(toolsRoot, "builtins.ts"),
     "utf8",
   );
 
-  assert.doesNotMatch(providerSource, /toolHandlers\.js/);
-  assert.match(providerSource, /\.\/index\.js/);
+  assert.doesNotMatch(builtinsSource, /toolHandlers\.js/);
+  assert.match(builtinsSource, /\.\/file\/index\.js/);
 
   const expectedFactoryFiles = [
-    "file/bashTool.ts",
-    "file/readFileTool.ts",
-    "file/writeFileTool.ts",
-    "file/editFileTool.ts",
-    "task/createTaskTool.ts",
-    "task/getTaskTool.ts",
-    "task/updateTaskTool.ts",
-    "task/listTaskTool.ts",
-    "skill/loadSkillTool.ts",
-    "background/backgroundRunTool.ts",
-    "background/checkBackgroundTool.ts",
-    "memory/updateMemoryTool.ts",
+    "file/bash.ts",
+    "file/read.ts",
+    "file/write.ts",
+    "file/edit.ts",
+    "task/create.ts",
+    "task/get.ts",
+    "task/update.ts",
+    "task/list.ts",
+    "background/run.ts",
+    "background/check.ts",
+    "subagent/subagentTool.ts",
+    "subagent/checkTool.ts",
+    "skill/load.ts",
+    "memory/save.ts",
   ];
 
-  const builtinFiles = await readdir(builtinRoot, { recursive: true });
+  const toolFiles = await readdir(toolsRoot, { recursive: true });
   assert.deepEqual(
-    expectedFactoryFiles.filter((file) => builtinFiles.includes(file)),
+    expectedFactoryFiles.filter((file) => toolFiles.includes(file)),
     expectedFactoryFiles,
   );
 
-  await assert.rejects(access(path.join(toolsRoot, "builtinToolProvider.ts")));
+  await assert.rejects(access(path.join(toolsRoot, "builtin")));
   await assert.rejects(access(path.join(toolsRoot, "toolHandlers.ts")));
 });

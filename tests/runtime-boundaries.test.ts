@@ -3,25 +3,25 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HookBus } from "../src/hooks/index.js";
+import { HookBus } from "../src/hooks/hookBus.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { client } from "../src/config.js";
 import { createAppContext } from "../src/app/context.js";
-import { pushTaggedUserMessage } from "../src/app/messageInjection.js";
-import { registerRuntimeHooks } from "../src/app/runtimeHooks.js";
-import { runSubAgent } from "../src/agent/subagent.js";
-import { SubAgentRunner } from "../src/agent/subAgentRunner.js";
+import { pushTaggedUserMessage } from "../src/hooks/messageInjection.js";
+import { registerRuntimeHooks } from "../src/hooks/runtimeHooks.js";
+import { runSubAgent } from "../src/tools/subagent/subagent.js";
+import { SubAgentRunner } from "../src/tools/subagent/subAgentRunner.js";
 import { hasPendingAsyncWork, safeQuestion } from "../src/cli/index.js";
 import { PROMPT_SECTIONS } from "../src/prompt/sections.js";
-import { BackgroundManager } from "../src/tools/backgroundManager.js";
-import { agentIdentity } from "../src/tools/agentIdentity.js";
+import { BackgroundManager } from "../src/tools/background/backgroundManager.js";
+import { agentIdentity } from "../src/tools/identity.js";
 import { requireNonEmptyString } from "../src/tools/input.js";
-import { ToolRegistry } from "../src/tools/toolRegistry.js";
-import { ToolRuntime } from "../src/tools/toolRuntime.js";
-import { TaskManager } from "../src/tools/taskManager.js";
-import { loadBuiltinTools } from "../src/tools/builtin/provider.js";
-import { validateToolProfiles } from "../src/tools/toolProfiles.js";
-import type { RegisteredTool } from "../src/tools/toolTypes.js";
+import { ToolRegistry } from "../src/tools/registry.js";
+import { ToolRuntime } from "../src/tools/runtime.js";
+import { TaskManager } from "../src/tools/task/taskManager.js";
+import { loadBuiltinTools } from "../src/tools/builtins.js";
+import { validateToolProfiles } from "../src/tools/profiles.js";
+import type { RegisteredTool } from "../src/tools/types.js";
 
 function toolDefinition(name: string) {
   return {

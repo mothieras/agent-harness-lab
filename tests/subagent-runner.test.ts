@@ -6,10 +6,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { client } from "../src/config.js";
-import { HookBus } from "../src/hooks/index.js";
-import { agentIdentity } from "../src/tools/agentIdentity.js";
-import { SubAgentRunner } from "../src/agent/subAgentRunner.js";
-import type { ToolRuntime } from "../src/tools/toolRuntime.js";
+import { HookBus } from "../src/hooks/hookBus.js";
+import { agentIdentity } from "../src/tools/identity.js";
+import { SubAgentRunner } from "../src/tools/subagent/subAgentRunner.js";
+import type { ToolRuntime } from "../src/tools/runtime.js";
 import { createAppContext } from "../src/app/context.js";
 
 function textResponse(text: string): Anthropic.Messages.Message {

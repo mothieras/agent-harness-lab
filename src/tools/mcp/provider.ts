@@ -1,4 +1,4 @@
-import type { RegisteredTool, ToolDefinition, ToolProviderLoadResult } from "../toolTypes.js";
+import type { RegisteredTool, ToolDefinition, ToolProviderLoadResult } from "../types.js";
 import { createMcpHandler } from "./handler.js";
 import { mcpNamespacePrefix, mcpToolName } from "./names.js";
 import type { McpClient, McpToolSchema } from "./types.js";

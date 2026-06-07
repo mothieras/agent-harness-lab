@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ToolRegistry } from "../src/tools/toolRegistry.js";
-import type { RegisteredTool, ToolDefinition } from "../src/tools/toolTypes.js";
+import { ToolRegistry } from "../src/tools/registry.js";
+import type { RegisteredTool, ToolDefinition } from "../src/tools/types.js";
 
 function definition(name: string): ToolDefinition {
   return {

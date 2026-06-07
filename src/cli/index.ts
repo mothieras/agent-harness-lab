@@ -1,16 +1,16 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { agentLoop, describeFinalResponse } from "../agent/index.js";
-import { forceCompact } from "../agent/contextCompact.js";
+import { agentLoop, describeFinalResponse } from "../loop/index.js";
+import { forceCompact } from "../loop/compact.js";
 import { createAppContext } from "../app/context.js";
 import type { AppContext } from "../app/context.js";
-import { registerRuntimeHooks } from "../app/runtimeHooks.js";
+import { registerRuntimeHooks } from "../hooks/runtimeHooks.js";
 import { buildSystemPrompt } from "../prompt/assembler.js";
 import type { PromptContext } from "../prompt/assembler.js";
 import { createPermissionChecker } from "../permission/permission.js";
 import type { AskUserFn, CheckPermissionFn } from "../permission/types.js";
-import { agentIdentity } from "../tools/agentIdentity.js";
+import { agentIdentity } from "../tools/identity.js";
 import { logToolResult } from "./toolLog.js";
 
 type LeadTurnOptions = {

@@ -1,5 +1,5 @@
 import type { ToolHandler } from "../input.js";
-import type { ToolSource } from "../toolTypes.js";
+import type { ToolSource } from "../types.js";
 import { normalizeMcpResult } from "./result.js";
 import type { McpClient } from "./types.js";
 

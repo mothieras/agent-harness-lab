@@ -11,9 +11,9 @@ import {
   initialRecoveryState,
   MAX_RETRIES,
   retryDelay,
-} from "../src/agent/errorRecovery.js";
-import { agentLoop } from "../src/agent/loop.js";
-import type { ToolDefinition } from "../src/tools/toolTypes.js";
+} from "../src/loop/recovery.js";
+import { agentLoop } from "../src/loop/loop.js";
+import type { ToolDefinition } from "../src/tools/types.js";
 
 function textResponse(
   text: string,

@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "../toolTypes.js";
+import type { ToolDefinition } from "../types.js";
 
 export type McpToolSchema = {
   name: string;

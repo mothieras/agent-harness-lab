@@ -4,12 +4,12 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createAppContext } from "../src/app/context.js";
-import { BackgroundManager } from "../src/tools/backgroundManager.js";
+import { BackgroundManager } from "../src/tools/background/backgroundManager.js";
 import { MockMcpClient } from "../src/tools/mcp/mockClient.js";
 import { loadMcpTools } from "../src/tools/mcp/provider.js";
-import { TaskManager } from "../src/tools/taskManager.js";
-import { ToolRegistry } from "../src/tools/toolRegistry.js";
-import { ToolRuntime } from "../src/tools/toolRuntime.js";
+import { TaskManager } from "../src/tools/task/taskManager.js";
+import { ToolRegistry } from "../src/tools/registry.js";
+import { ToolRuntime } from "../src/tools/runtime.js";
 
 test("MCP provider converts listed tools into namespaced RegisteredTool entries", async () => {
   const client = new MockMcpClient({

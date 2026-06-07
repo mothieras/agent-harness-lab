@@ -1,17 +1,17 @@
 import path from "node:path";
 import { client, MODEL } from "../config.js";
-import { HookBus } from "../hooks/index.js";
-import { MemoryManager } from "../memory/memoryManager.js";
+import { HookBus } from "../hooks/hookBus.js";
+import { MemoryManager } from "../tools/memory/memoryManager.js";
 import type { CheckPermissionFn } from "../permission/types.js";
-import { SkillLoader } from "../skills/skillLoader.js";
-import { BackgroundManager } from "../tools/backgroundManager.js";
-import { loadBuiltinTools } from "../tools/builtin/provider.js";
-import { TaskManager } from "../tools/taskManager.js";
-import { ToolRegistry } from "../tools/toolRegistry.js";
-import { ToolRuntime } from "../tools/toolRuntime.js";
-import { validateToolProfiles } from "../tools/toolProfiles.js";
-import type { ToolProviderLoadResult } from "../tools/toolTypes.js";
-import { SubAgentRunner } from "../agent/subAgentRunner.js";
+import { SkillLoader } from "../tools/skill/skillLoader.js";
+import { BackgroundManager } from "../tools/background/backgroundManager.js";
+import { loadBuiltinTools } from "../tools/builtins.js";
+import { TaskManager } from "../tools/task/taskManager.js";
+import { ToolRegistry } from "../tools/registry.js";
+import { ToolRuntime } from "../tools/runtime.js";
+import { validateToolProfiles } from "../tools/profiles.js";
+import type { ToolProviderLoadResult } from "../tools/types.js";
+import { SubAgentRunner } from "../tools/subagent/subAgentRunner.js";
 
 export interface AppContext {
   workspaceRoot: string;
