@@ -49,4 +49,5 @@ added independently.
 - `docs/architecture/runtime-flow.md` — startup path, loop responsibilities, and error boundaries
 - `docs/architecture/tool-system.md` — `RegisteredTool`, providers, registry/runtime, builtin factories, and MCP-0 mock provider boundaries
 - `docs/architecture/hook-system.md` — effect hooks, control hooks, event semantics, and hook invariants
+- `docs/architecture/limitations-and-roadmap.md` — known structural limitations and prioritized next steps
 - `docs/decisions/` — short ADR-style notes for the main architecture decisions
