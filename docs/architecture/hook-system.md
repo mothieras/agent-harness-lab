@@ -50,7 +50,7 @@ Stop
 
 ## Typed Contract
 
-`src/hooks/index.ts` defines per-event argument types:
+`src/hooks/hookBus.ts` defines per-event argument types:
 
 ```ts
 type HookArgs = {

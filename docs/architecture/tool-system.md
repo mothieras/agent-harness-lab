@@ -17,35 +17,33 @@ The important rule is that a tool's model-facing definition and executable handl
 
 ### Tool Factory
 
-A tool factory owns one tool's definition and handler.
+A tool factory owns one tool's definition and handler, and declares exactly the dependencies that tool needs.
 
-Builtin examples live under `src/tools/builtin/**`:
+Builtin tools live under `src/tools/<group>/`, one file per tool:
 
 ```text
-src/tools/builtin/file/readFileTool.ts
-src/tools/builtin/task/createTaskTool.ts
-src/tools/builtin/team/sendMessageTool.ts
+src/tools/file/read.ts
+src/tools/task/create.ts
+src/tools/subagent/subagentTool.ts
 ```
 
-Each file exports a `createXTool(deps): RegisteredTool` function.
+Each file exports a `createXTool(deps): RegisteredTool` function. `deps` is a small inline object containing only the services that tool uses — there is no shared "deps bag". The `builtinTool(definition, handler)` helper in `src/tools/types.ts` stamps the `source: { type: "builtin" }` metadata so a factory only spells out its definition and handler.
 
-### Builtin Group Indexes
+### Group Indexes
 
 Group indexes aggregate related tools:
 
 ```text
-src/tools/builtin/file/index.ts
-src/tools/builtin/task/index.ts
-src/tools/builtin/team/index.ts
+src/tools/file/index.ts
+src/tools/task/index.ts
+src/tools/subagent/index.ts
 ```
 
-They answer: which builtin tools are part of this group, and in what order?
+They answer: which builtin tools are in this group, in what order, and which services the group requires. They contain no tool business logic.
 
-They should not contain tool business logic.
+### Builtin Composition
 
-### Builtin Provider
-
-`src/tools/builtin/provider.ts` loads builtin tools and returns a `ToolProviderLoadResult`:
+`src/tools/builtins.ts` is the single composition root for builtin tools. `loadBuiltinTools(services)` takes a `BuiltinServices` object (all long-lived services), hands each group only the services it needs, and returns a `ToolProviderLoadResult`:
 
 ```ts
 type ToolProviderLoadResult = {
@@ -54,7 +52,16 @@ type ToolProviderLoadResult = {
 };
 ```
 
-The builtin provider uses static imports. It should not scan the filesystem.
+It uses static imports and does not scan the filesystem. Tool order is explicit here: **file → task → background → subagent → skill → memory**. (`builtins.ts` replaces the older `builtin/index.ts` + `builtin/provider.ts` two-file split.)
+
+### Co-located State
+
+Stateful services that back a tool group live next to that group:
+
+```text
+src/tools/task/taskManager.ts
+src/tools/background/backgroundManager.ts
+```
 
 ### MCP Provider
 
@@ -77,7 +84,7 @@ If `listTools()` fails, the provider returns no tools and records an unavailable
 
 ### Tool Registry
 
-`ToolRegistry` stores successfully registered tools and provider diagnostics.
+`ToolRegistry` (`src/tools/registry.ts`) stores successfully registered tools and provider diagnostics.
 
 It is responsible for:
 
@@ -91,7 +98,7 @@ It is not responsible for discovering providers.
 
 ### Tool Runtime
 
-`ToolRuntime` invokes tools through the registry:
+`ToolRuntime` (`src/tools/runtime.ts`) invokes tools through the registry:
 
 ```text
 ToolRuntime.invokeTool(name, input)
@@ -106,26 +113,28 @@ If no handler exists, runtime checks diagnostics before returning unsupported to
 1. Create a focused factory file:
 
 ```text
-src/tools/builtin/<group>/<name>Tool.ts
+src/tools/<group>/<name>.ts
 ```
 
-2. Export a factory:
+2. Export a factory taking only the deps it needs:
 
 ```ts
-export function createXTool(deps: BuiltinToolDeps): RegisteredTool {
+export function createXTool(deps: { taskManager: TaskManager }): RegisteredTool {
   return builtinTool(definition, handler);
 }
 ```
 
 3. Add it to the group `index.ts`.
 
-4. If a restricted agent role should see it, update `src/tools/toolProfiles.ts`.
+4. If the tool needs a service not yet threaded through, add it to `BuiltinServices` and pass it from `loadBuiltinTools()` in `src/tools/builtins.ts`.
+
+5. If a restricted agent role (the `subagent` profile) should see it, update `src/tools/profiles.ts`.
 
 Lead agent visibility normally comes from all registered tools, so most new builtin tools do not need profile changes.
 
 ## MCP-0 Boundary
 
-Mock MCP tools now follow the same final shape:
+Mock MCP tools follow the same final shape:
 
 ```ts
 {
@@ -158,6 +167,7 @@ Real MCP transport should plug in behind `McpClient`.
 - Do not recreate a global `toolDefinitions.ts` list.
 - Do not recreate a central `toolHandlers.ts` file.
 - Do not let `ToolRuntime` keep its own handler map.
+- Do not reintroduce a shared deps bag; each tool declares only the deps it uses.
 - Do not put secrets in `source`; credentials belong in client/config/transport layers.
-- Keep tool order explicit and stable through static aggregation.
+- Keep tool order explicit and stable through `builtins.ts`.
 - Real MCP clients must call original MCP tool names, not global registry names.

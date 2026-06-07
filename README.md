@@ -14,12 +14,11 @@ added independently.
 ## What's Built
 
 - **Agent Loop** — model ↔ tools core loop with max_turns and deadline enforcement
-- **Tool System** — builtin and orchestration tools including file ops, task tracking, background tasks, team comms, and async subagent delegation
+- **Tool System** — one file per tool, grouped by function (file ops, task tracking, background tasks, async subagent delegation, skills, memory), composed through a single `loadBuiltinTools` provider
 - **System Prompt** — stability-ordered section assembly (soul → guidelines → skills → memory)
 - **Permission Pipeline** — three-gate check (deny list → rule matching → user approval)
 - **Hook Bus** — six event points with instance-based HookBus (not global state)
-- **Subagent** — async `agentLoop` delegation via `subagent`/`check_subagent`; fire-and-forget with identity isolation, host auto-wake, and lead-only result injection (see ADR 0006)
-- **Teammate** — async teammate manager and inbox primitives retained for future explicit actor work
+- **Subagent** — async `agentLoop` delegation via the `subagent`/`check_subagent` builtin tools; fire-and-forget with identity isolation, host auto-wake, and lead-only result injection (see ADR 0006)
 - **Skill Loading** — two-layer injection: index in system prompt, full content on demand
 - **Context Compaction** — micro-compact (>30k tokens), auto-compact (>50k tokens), reactive compact on prompt overflow
 - **Error Recovery** — output-token recovery, reactive compaction on prompt overflow, and bounded backoff for rate limits, overloads, and transient network failures
@@ -29,25 +28,21 @@ added independently.
 
 ## Source Layout
 
-- `src/main.ts` → `src/cli/index.ts` → `src/app/context.ts` → `src/agent/loop.ts` is the normal startup path
-- `src/agent/` — core loop, recovery decisions, options, deadline, context compaction, subagent runner
+- `src/main.ts` → `src/cli/index.ts` → `src/app/context.ts` → `src/loop/loop.ts` is the normal startup path
+- `src/loop/` — core loop, recovery decisions, options, deadline, context compaction, response formatting
 - `src/prompt/` — system prompt sections and stability-ordered assembly
 - `src/permission/` — three-gate permission pipeline (deny list, rules, user approval)
-- `src/hooks/` — typed HookBus with effect/control events for six loop lifecycle points
-- `src/tools/` — `RegisteredTool` contracts, builtin provider, mock MCP provider, per-tool builtin factories, `ToolRegistry`, `ToolRuntime`, allowed tool profiles, input validation
-- `src/app/` — DI container (`AppContext`), startup registration, tool-profile validation, orchestration tools, runtime hooks, message injection
+- `src/hooks/` — typed `HookBus` (`hookBus.ts`), runtime injections (`runtimeHooks.ts`), tagged message injection
+- `src/tools/` — `RegisteredTool` contracts (`types.ts`), `ToolRegistry`, `ToolRuntime`, allowed tool profiles, the single `builtins.ts` composition, and one file per tool under function groups (`file/`, `task/`, `background/`, `subagent/`, `skill/`, `memory/`) with co-located state managers; `mcp/` mock provider boundary
+- `src/app/` — DI container (`AppContext`) / composition root and tool-profile validation
 - `src/cli/` — interactive readline shell and terminal presentation
-- `src/team/` — teammate lifecycle, inbox messaging, notifications
-- `src/memory/` — cross-session persistent memory with index and consolidation
-- `src/skills/` — directory-based skill loading with YAML frontmatter
 
 ## Runtime Flow
 
-1. `createAppContext()` builds managers, loads builtin `RegisteredTool[]`, registers any preloaded provider results in `ToolRegistry`, then validates allowed tool profiles.
-2. `registerOrchestrationTools()` adds `subagent` and `check_subagent` as the default orchestration tools.
-3. `agentLoop()` receives tool definitions and only owns model/tool protocol orchestration.
-4. Tool execution goes through `ToolRuntime.invokeTool()` → `ToolRegistry.getHandler()`.
-5. Subagent loops use centralized allowed tool profiles; unknown allowed tool names fail fast instead of being silently filtered. Teammate profiles remain validated for future async actor work.
+1. `createAppContext()` builds managers, then `ToolRegistry` → `ToolRuntime` → `SubAgentRunner`, then loads builtin `RegisteredTool[]` (including `subagent`/`check_subagent`) plus any preloaded provider results, and validates allowed tool profiles.
+2. `agentLoop()` receives tool definitions and only owns model/tool protocol orchestration.
+3. Tool execution goes through `ToolRuntime.invokeTool()` → `ToolRegistry.getHandler()`.
+4. Subagent loops use centralized allowed tool profiles; unknown allowed tool names fail fast instead of being silently filtered.
 
 ## Architecture Docs
 
