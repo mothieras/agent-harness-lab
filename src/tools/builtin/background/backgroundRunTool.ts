@@ -1,8 +1,11 @@
 import { requireNonEmptyString } from "../../input.js";
+import type { BackgroundManager } from "../../backgroundManager.js";
 import type { RegisteredTool } from "../../toolTypes.js";
-import { builtinTool, type BuiltinToolDeps } from "../types.js";
+import { builtinTool } from "../types.js";
 
-export function createBackgroundRunTool(deps: BuiltinToolDeps): RegisteredTool {
+export function createBackgroundRunTool(deps: {
+  backgroundManager: BackgroundManager;
+}): RegisteredTool {
   return builtinTool(
     {
       name: "background_run",

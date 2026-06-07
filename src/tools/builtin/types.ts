@@ -1,17 +1,5 @@
-import type { MemoryManager } from "../../memory/memoryManager.js";
-import type { SkillLoader } from "../../skills/skillLoader.js";
-import type { BackgroundManager } from "../backgroundManager.js";
 import type { ToolHandler } from "../input.js";
-import type { TaskManager } from "../taskManager.js";
 import type { RegisteredTool, ToolDefinition } from "../toolTypes.js";
-
-export type BuiltinToolDeps = {
-  workspaceRoot: string;
-  skillLoader: SkillLoader;
-  memoryManager: MemoryManager;
-  taskManager: TaskManager;
-  backgroundManager: BackgroundManager;
-};
 
 export function builtinTool(
   definition: ToolDefinition,

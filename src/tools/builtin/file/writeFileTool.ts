@@ -1,9 +1,30 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { formatError } from "../../formatError.js";
 import { requireString } from "../../input.js";
 import type { RegisteredTool } from "../../toolTypes.js";
-import { runWriteFile } from "./runWriteFile.js";
-import { builtinTool, type BuiltinToolDeps } from "../types.js";
+import { safePath } from "./safePath.js";
+import { builtinTool } from "../types.js";
 
-export function createWriteFileTool(deps: BuiltinToolDeps): RegisteredTool {
+async function runWriteFile(
+  pathArg: string,
+  content: string,
+  workspaceRoot: string,
+): Promise<string> {
+  try {
+    const filePath = await safePath(pathArg, workspaceRoot);
+    const parentDir = path.dirname(filePath);
+    await mkdir(parentDir, { recursive: true });
+    await writeFile(filePath, content, "utf8");
+    return `Wrote ${content.length} bytes to ${pathArg}`;
+  } catch (e) {
+    return formatError(e);
+  }
+}
+
+export function createWriteFileTool(deps: {
+  workspaceRoot: string;
+}): RegisteredTool {
   return builtinTool(
     {
       name: "write_file",

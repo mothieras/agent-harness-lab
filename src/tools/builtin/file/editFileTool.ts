@@ -1,9 +1,32 @@
-import { runEditFile } from "./runEditFile.js";
+import { readFile, writeFile } from "node:fs/promises";
+import { formatError } from "../../formatError.js";
 import { requireString } from "../../input.js";
 import type { RegisteredTool } from "../../toolTypes.js";
-import { builtinTool, type BuiltinToolDeps } from "../types.js";
+import { safePath } from "./safePath.js";
+import { builtinTool } from "../types.js";
 
-export function createEditFileTool(deps: BuiltinToolDeps): RegisteredTool {
+async function runEditFile(
+  pathArg: string,
+  oldText: string,
+  newText: string,
+  workspaceRoot: string,
+): Promise<string> {
+  try {
+    const filePath = await safePath(pathArg, workspaceRoot);
+    const content = await readFile(filePath, "utf8");
+    if (!content.includes(oldText)) {
+      return `Error: Text not found in ${pathArg}`;
+    }
+    await writeFile(filePath, content.replace(oldText, newText), "utf8");
+    return `Edited ${pathArg}`;
+  } catch (e) {
+    return formatError(e);
+  }
+}
+
+export function createEditFileTool(deps: {
+  workspaceRoot: string;
+}): RegisteredTool {
   return builtinTool(
     {
       name: "edit_file",

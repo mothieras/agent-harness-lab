@@ -2,9 +2,11 @@ import { formatError } from "../../formatError.js";
 import { requireNonEmptyString, requireString, type ToolInput } from "../../input.js";
 import type { TaskManager } from "../../taskManager.js";
 import type { RegisteredTool } from "../../toolTypes.js";
-import { builtinTool, type BuiltinToolDeps } from "../types.js";
+import { builtinTool } from "../types.js";
 
-export function createTaskCreateTool(deps: BuiltinToolDeps): RegisteredTool {
+export function createTaskCreateTool(deps: {
+  taskManager: TaskManager;
+}): RegisteredTool {
   return builtinTool(
     {
       name: "task_create",

@@ -1,8 +1,11 @@
 import { requireNonEmptyString } from "../../input.js";
+import type { SkillLoader } from "../../../skills/skillLoader.js";
 import type { RegisteredTool } from "../../toolTypes.js";
-import { builtinTool, type BuiltinToolDeps } from "../types.js";
+import { builtinTool } from "../types.js";
 
-export function createLoadSkillTool(deps: BuiltinToolDeps): RegisteredTool {
+export function createLoadSkillTool(deps: {
+  skillLoader: SkillLoader;
+}): RegisteredTool {
   return builtinTool(
     {
       name: "load_skill",

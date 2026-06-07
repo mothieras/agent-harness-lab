@@ -2,9 +2,11 @@ import type { MemoryManager } from "../../../memory/memoryManager.js";
 import type { MemoryType } from "../../../memory/types.js";
 import { requireNonEmptyString, requireString, type ToolInput } from "../../input.js";
 import type { RegisteredTool } from "../../toolTypes.js";
-import { builtinTool, type BuiltinToolDeps } from "../types.js";
+import { builtinTool } from "../types.js";
 
-export function createUpdateMemoryTool(deps: BuiltinToolDeps): RegisteredTool {
+export function createUpdateMemoryTool(deps: {
+  memoryManager: MemoryManager;
+}): RegisteredTool {
   return builtinTool(
     {
       name: "update_memory",
