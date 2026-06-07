@@ -24,7 +24,7 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 4. If stop_reason is anything else, triggers `Stop` hook (which can force continuation), then returns
 5. Enforces max_turns and timeout via `agent/deadline.ts`; recovery retries do not consume max_turns
 6. Six hook trigger points: LoopStart, UserPromptSubmit, PreToolUse, PostToolUse, ToolResultsReady, Stop
-7. Subagents use the same `agentLoop()` with restricted tools and fewer turns; the default orchestration path is blocking delegation through `subagent`
+7. Subagents use the same `agentLoop()` with restricted tools and fewer turns; the default orchestration path is async delegation through `subagent`/`check_subagent` (fire-and-forget + host auto-wake, see ADR 0006)
 8. Teammate manager/inbox primitives remain available in source for future explicit async actor work, but `teammate` is not registered as a default orchestration tool
 9. `allowedTools` is resolved through centralized tool profiles and fails fast on unknown tool names
 

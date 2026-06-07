@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed.
+Accepted, then superseded by [0006](0006-async-subagent-runner.md) for the subagent execution model (synchronous → asynchronous). The role/name metadata, teammate deferral, and CLI readline-lifecycle decisions below remain in force.
 
 ## Context
 

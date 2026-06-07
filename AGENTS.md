@@ -40,7 +40,7 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 - File tools (`bash`, `read_file`, `write_file`, `edit_file`) route through `builtin/file/safePath.ts` which resolves symlinks and enforces workspace containment
 - `taskManager.ts` — JSON-file task persistence in `.tasks/` with status transitions (pending→in_progress→completed) and blocking dependencies
 - `backgroundManager.ts` — fire-and-forget shell commands with notification queue, consumed by runtime hooks as `<background-results>`
-- `src/agent/subagent.ts` — constrained blocking `agentLoop` runner used by the `subagent` orchestration tool
+- `src/agent/subagent.ts` — constrained `agentLoop` runner, wrapped by `src/agent/subAgentRunner.ts` (async fire-and-forget, identity-isolated, never-rejecting) behind the `subagent`/`check_subagent` orchestration tools
 
 **Agent Teams** (`src/team/`):
 - `teammateManager.ts` — spawn/fire-and-forget teammate lifecycle (working→idle→shutdown), in-memory inbox Map per teammate, notification queue for `<teammate-updates>` injection

@@ -14,11 +14,11 @@ added independently.
 ## What's Built
 
 - **Agent Loop** — model ↔ tools core loop with max_turns and deadline enforcement
-- **Tool System** — builtin and orchestration tools including file ops, task tracking, background tasks, team comms, and blocking subagent delegation
+- **Tool System** — builtin and orchestration tools including file ops, task tracking, background tasks, team comms, and async subagent delegation
 - **System Prompt** — stability-ordered section assembly (soul → guidelines → skills → memory)
 - **Permission Pipeline** — three-gate check (deny list → rule matching → user approval)
 - **Hook Bus** — six event points with instance-based HookBus (not global state)
-- **Subagent** — constrained blocking `agentLoop` delegation via `subagent` tool, isolated execution
+- **Subagent** — async `agentLoop` delegation via `subagent`/`check_subagent`; fire-and-forget with identity isolation, host auto-wake, and lead-only result injection (see ADR 0006)
 - **Teammate** — async teammate manager and inbox primitives retained for future explicit actor work
 - **Skill Loading** — two-layer injection: index in system prompt, full content on demand
 - **Context Compaction** — micro-compact (>30k tokens), auto-compact (>50k tokens), reactive compact on prompt overflow
@@ -44,7 +44,7 @@ added independently.
 ## Runtime Flow
 
 1. `createAppContext()` builds managers, loads builtin `RegisteredTool[]`, registers any preloaded provider results in `ToolRegistry`, then validates allowed tool profiles.
-2. `registerOrchestrationTools()` adds `subagent` as the default orchestration tool.
+2. `registerOrchestrationTools()` adds `subagent` and `check_subagent` as the default orchestration tools.
 3. `agentLoop()` receives tool definitions and only owns model/tool protocol orchestration.
 4. Tool execution goes through `ToolRuntime.invokeTool()` → `ToolRegistry.getHandler()`.
 5. Subagent loops use centralized allowed tool profiles; unknown allowed tool names fail fast instead of being silently filtered. Teammate profiles remain validated for future async actor work.
