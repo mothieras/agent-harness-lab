@@ -1,6 +1,6 @@
 ## Agent Harness Lab
 
-A from-scratch, framework-free coding-agent runtime in TypeScript (~2200 lines) — the
+A from-scratch, framework-free coding-agent runtime in TypeScript (~4000 lines) — the
 model↔tools core loop built up piece by piece so every runtime concern (tool dispatch,
 permission gating, subagent delegation, context compaction, error recovery) stays visible
 in code rather than buried inside a framework.
