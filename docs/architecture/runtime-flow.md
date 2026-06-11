@@ -47,7 +47,7 @@ The loop should not know whether a tool is builtin or MCP. It only sees names, t
 
 Errors are intentionally split by layer:
 
-- `errorRecovery.ts` decides how to respond to model/API call failures.
+- `recovery.ts` decides how to respond to model/API call failures.
 - `agentLoop` executes recovery actions because it owns loop state and message flow.
 - `ToolRuntime` converts unknown, unavailable, and thrown tool errors into tool-result strings.
 - `ToolRegistry` stores provider diagnostics that explain unavailable tool namespaces.

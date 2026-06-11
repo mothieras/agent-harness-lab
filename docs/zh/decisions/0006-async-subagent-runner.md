@@ -34,7 +34,7 @@
 **Lead 生命周期使用宿主自动唤醒（选项 A），而非 Stop hook（选项 B）。**
 
 - lead 自由结束其回合。CLI 循环执行 `while (hasPendingAsyncWork(app))`——后台任务或 `subAgentRunner.hasRunning()`——并通过 `waitForAsyncWork`（带 SIGINT 退出的 500ms 轮询）重新调用 lead。
-- 结果通过 lead 专属的 `injectSubagentResults` 在 `UserPromptSubmit` 上到达 lead，以 `<subagent-results>` 消息的形式交付。
+- 结果通过 lead 专属的 `injectSubagentResults` 在 `PreLLMCall` 上到达 lead，以 `<subagent-results>` 消息的形式交付。
 
 **设计了三个隔离属性**，因为与 `BackgroundManager`（独立 OS 进程，零共享状态）不同，subagent 在进程内运行，共享 `toolRuntime`：
 

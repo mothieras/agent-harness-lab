@@ -32,7 +32,7 @@ Replace the blocking `subagent` tool with an async `SubAgentRunner` (`src/agent/
 **Lead lifecycle uses host auto-wake (Option A), not a Stop hook (Option B).**
 
 - The lead ends its turn freely. The CLI loops `while (hasPendingAsyncWork(app))` — background tasks OR `subAgentRunner.hasRunning()` — and re-invokes the lead via `waitForAsyncWork` (a 500ms poll with a SIGINT escape).
-- Results reach the lead via the lead-only `injectSubagentResults` on `UserPromptSubmit`, delivered as `<subagent-results>` messages.
+- Results reach the lead via the lead-only `injectSubagentResults` on `PreLLMCall`, delivered as `<subagent-results>` messages.
 
 **Three isolation properties** are engineered because, unlike `BackgroundManager` (separate OS process, zero shared state), a subagent runs in-process sharing `toolRuntime`:
 

@@ -8,7 +8,7 @@ Hook 在已知的生命周期点扩展 Agent 循环。它们被有意分为效�
 
 ```text
 LoopStart
-UserPromptSubmit
+PreLLMCall
 PreToolUse
 PostToolUse
 ToolResultsReady
@@ -21,7 +21,7 @@ Stop
 
 ```text
 LoopStart
-UserPromptSubmit
+PreLLMCall
 PostToolUse
 ToolResultsReady
 ```
@@ -31,7 +31,7 @@ ToolResultsReady
 重要语义：
 
 - `LoopStart` 初始化每循环状态。
-- `UserPromptSubmit` 可在模型调用前变更 `messages`。
+- `PreLLMCall` 可在模型调用前变更 `messages`。
 - `PostToolUse` 观察已完成的工具调用并可更新本地状态。
 - `ToolResultsReady` 可在结果列表作为用户消息推送之前变更它。
 
@@ -57,7 +57,7 @@ Stop
 ```ts
 type HookArgs = {
   LoopStart: [messages];
-  UserPromptSubmit: [messages];
+  PreLLMCall: [messages];
   PreToolUse: [block];
   PostToolUse: [block, output];
   ToolResultsReady: [results];

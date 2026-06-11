@@ -6,7 +6,7 @@ Hooks extend the agent loop at known lifecycle points. They are intentionally sp
 
 ```text
 LoopStart
-UserPromptSubmit
+PreLLMCall
 PreToolUse
 PostToolUse
 ToolResultsReady
@@ -19,7 +19,7 @@ Effect hooks run every registered callback. Return values are ignored.
 
 ```text
 LoopStart
-UserPromptSubmit
+PreLLMCall
 PostToolUse
 ToolResultsReady
 ```
@@ -29,7 +29,7 @@ Use these for lifecycle state changes, message/result mutation, terminal display
 Important semantics:
 
 - `LoopStart` initializes per-loop state.
-- `UserPromptSubmit` may mutate `messages` before the model call.
+- `PreLLMCall` may mutate `messages` before the model call.
 - `PostToolUse` observes a completed tool call and may update local state.
 - `ToolResultsReady` may mutate the result list before it is pushed as a user message.
 
@@ -55,7 +55,7 @@ Stop
 ```ts
 type HookArgs = {
   LoopStart: [messages];
-  UserPromptSubmit: [messages];
+  PreLLMCall: [messages];
   PreToolUse: [block];
   PostToolUse: [block, output];
   ToolResultsReady: [results];
