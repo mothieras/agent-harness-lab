@@ -32,7 +32,7 @@ export function registerRuntimeHooks(app: AppContext): void {
 		taskStates.set(agentName(), newTaskLoopState());
 	});
 
-	app.hooks.register("UserPromptSubmit", (messages) => {
+	app.hooks.register("PreLLMCall", (messages) => {
 		injectTaskStatus(app, taskState(), messages);
 		injectBackgroundResults(app, messages);
 		injectSubagentResults(app, messages);

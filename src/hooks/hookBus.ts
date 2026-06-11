@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 
 export type HookEvent =
   | "LoopStart"
-  | "UserPromptSubmit"
+  | "PreLLMCall"
   | "PreToolUse"
   | "PostToolUse"
   | "ToolResultsReady"
@@ -10,7 +10,7 @@ export type HookEvent =
 
 export type EffectHookEvent =
   | "LoopStart"
-  | "UserPromptSubmit"
+  | "PreLLMCall"
   | "PostToolUse"
   | "ToolResultsReady";
 
@@ -22,7 +22,7 @@ export type ToolResultReadyBlock =
 
 export type HookArgs = {
   LoopStart: [messages: Anthropic.Messages.MessageParam[]];
-  UserPromptSubmit: [messages: Anthropic.Messages.MessageParam[]];
+  PreLLMCall: [messages: Anthropic.Messages.MessageParam[]];
   PreToolUse: [block: Anthropic.Messages.ToolUseBlock];
   PostToolUse: [block: Anthropic.Messages.ToolUseBlock, output: string];
   ToolResultsReady: [results: ToolResultReadyBlock[]];
@@ -49,7 +49,7 @@ function emptyEffectHooks(): {
 } {
   return {
     LoopStart: [],
-    UserPromptSubmit: [],
+    PreLLMCall: [],
     PostToolUse: [],
     ToolResultsReady: [],
   };

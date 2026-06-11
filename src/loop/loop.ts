@@ -103,7 +103,9 @@ export async function agentLoop(
         loopOptions.deadlineAt,
       );
 
-      loopOptions.hooks?.emitEffect("UserPromptSubmit", messages);
+      // Fires before every model call (every loop turn), not only on genuine
+      // user input — semantically a "pre LLM call" hook, despite the legacy name history.
+      loopOptions.hooks?.emitEffect("PreLLMCall", messages);
 
       // ── LLM call — outcome capture for recovery decision ──
       let outcome: LLMOutcome;

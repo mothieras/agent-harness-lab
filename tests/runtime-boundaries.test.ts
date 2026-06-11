@@ -167,15 +167,15 @@ test("effect hooks run every callback even when one returns text", () => {
   const hooks = new HookBus();
   const calls: string[] = [];
 
-  hooks.register("UserPromptSubmit", () => {
+  hooks.register("PreLLMCall", () => {
     calls.push("first");
     return "ignored";
   });
-  hooks.register("UserPromptSubmit", () => {
+  hooks.register("PreLLMCall", () => {
     calls.push("second");
   });
 
-  hooks.emitEffect("UserPromptSubmit", []);
+  hooks.emitEffect("PreLLMCall", []);
 
   assert.deepEqual(calls, ["first", "second"]);
 });
@@ -475,14 +475,14 @@ test("subagent results inject in lead context only, not in subagent context", as
     // Non-lead context must NOT drain the lead's subagent results.
     const subMessages: Anthropic.Messages.MessageParam[] = [];
     agentIdentity.run("worker-1", () =>
-      app.hooks.emitEffect("UserPromptSubmit", subMessages),
+      app.hooks.emitEffect("PreLLMCall", subMessages),
     );
     assert.doesNotMatch(JSON.stringify(subMessages), /subagent-results/);
 
     // Lead context drains and injects the (still-present) result.
     const leadMessages: Anthropic.Messages.MessageParam[] = [];
     agentIdentity.run("lead", () =>
-      app.hooks.emitEffect("UserPromptSubmit", leadMessages),
+      app.hooks.emitEffect("PreLLMCall", leadMessages),
     );
     const leadText = JSON.stringify(leadMessages);
     assert.match(leadText, /subagent-results/);

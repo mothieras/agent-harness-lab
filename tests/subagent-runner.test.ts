@@ -91,7 +91,7 @@ test("each subagent runs under its own identity, never 'lead'", async () => {
   client.messages.create = (async () => textResponse("done")) as typeof client.messages.create;
   const hooks = new HookBus();
   let observed: string | undefined;
-  hooks.register("UserPromptSubmit", () => {
+  hooks.register("PreLLMCall", () => {
     observed = agentIdentity.getStore();
   });
   try {
