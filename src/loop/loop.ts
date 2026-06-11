@@ -174,7 +174,7 @@ export async function agentLoop(
               forceCompact(
                 messages,
                 loopOptions.workspaceRoot,
-                "prompt too long recovery",
+                "context overflow recovery",
               ),
               loopOptions.deadlineAt,
             );

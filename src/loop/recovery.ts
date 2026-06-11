@@ -102,7 +102,7 @@ function isTransientNetworkError(error: unknown): boolean {
 	return false;
 }
 
-export function isPromptTooLongError(error: unknown): boolean {
+export function isContextOverflowError(error: unknown): boolean {
 	const e = error as { status?: number; name?: string; message?: string };
 	const msg = (typeof e.message === "string" ? e.message : "").toLowerCase();
 	return (
@@ -190,8 +190,8 @@ export function decideRecovery(
 	if (outcome.kind === "error") {
 		const error = outcome.error;
 
-		// prompt_too_long → compact once, then give up
-		if (isPromptTooLongError(error)) {
+		// context overflow → compact once, then give up
+		if (isContextOverflowError(error)) {
 			if (!state.hasAttemptedReactiveCompact) {
 				return {
 					type: "compact_and_retry",
