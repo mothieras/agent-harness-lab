@@ -4,7 +4,7 @@
 
 ## 状态
 
-已接受。在 subagent 执行模型（同步 → 异步）方面取代 [0005](0005-stable-subagent-orchestration.md)。0005 中的 role/name 元数据、teammate 推迟以及 CLI readline 生命周期决策仍然有效。
+已接受。在 subagent 执行模型（同步 → 异步）方面取代 [0005](0005-stable-subagent-orchestration.md)。0005 中的 role/name 元数据、teammate 推迟以及 CLI readline 生命周期决策仍然有效。注：下文中的 `src/agent/` 路径后来被 [0007](0007-tool-structure-and-layout-overhaul.md) 迁移到了 `src/tools/subagent/`，设计本身不变。
 
 ## 背景
 

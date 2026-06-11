@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+Accepted. The `src/tools/builtin/**` layout in the Decision below was later superseded by [0007](0007-tool-structure-and-layout-overhaul.md), which relocated builtin tools to `src/tools/<group>/` composed by `src/tools/builtins.ts`. The factory-per-tool principle and the `toolDefinitions.ts`/`toolHandlers.ts` invariants still hold — only the directory location changed.
 
 ## Context
 

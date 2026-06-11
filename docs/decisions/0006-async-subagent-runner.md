@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Supersedes [0005](0005-stable-subagent-orchestration.md) for the subagent execution model (synchronous → asynchronous). The role/name metadata, teammate deferral, and CLI readline-lifecycle decisions from 0005 remain in force.
+Accepted. Supersedes [0005](0005-stable-subagent-orchestration.md) for the subagent execution model (synchronous → asynchronous). The role/name metadata, teammate deferral, and CLI readline-lifecycle decisions from 0005 remain in force. Note: the `src/agent/` paths below were later relocated to `src/tools/subagent/` by [0007](0007-tool-structure-and-layout-overhaul.md); the design is unchanged.
 
 ## Context
 

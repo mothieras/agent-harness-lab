@@ -4,7 +4,7 @@
 
 ## 状态
 
-已采纳。
+已采纳。下方"决策"里的 `src/tools/builtin/**` 布局后来被 [0007](0007-tool-structure-and-layout-overhaul.md) 取代——内置工具改为放在 `src/tools/<group>/`、由 `src/tools/builtins.ts` 组合。"每个工具一个工厂"的原则与 `toolDefinitions.ts`/`toolHandlers.ts` 不变量仍然有效，变的只是目录位置。
 
 ## 背景
 
