@@ -143,6 +143,7 @@ export async function runCli(): Promise<void> {
       }
     }
   } finally {
+    await app.memoryManager.extract(history, { force: true });
     if (app.memoryManager.list().length >= 10) {
       await app.memoryManager.consolidate();
     }

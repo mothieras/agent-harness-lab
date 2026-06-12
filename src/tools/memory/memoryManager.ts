@@ -10,11 +10,15 @@ import path from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { MemoryEntry, MemoryType } from "./types.js";
 
+/** Auto-extraction runs at most once every N lead turns (plus a forced flush at session end). */
+const EXTRACT_INTERVAL = 15;
+
 export class MemoryManager {
   private readonly dir: string;
   private readonly client: Anthropic;
   private readonly model: string;
   #dirtyThisTurn: boolean = false;
+  #turnsSinceExtract: number = 0;
 
   constructor(memoryDir: string, client: Anthropic, model: string) {
     this.dir = memoryDir;
@@ -82,11 +86,18 @@ export class MemoryManager {
     return filename;
   }
 
-  async extract(messages: Anthropic.Messages.MessageParam[]): Promise<void> {
+  async extract(
+    messages: Anthropic.Messages.MessageParam[],
+    options: { force?: boolean } = {},
+  ): Promise<void> {
     if (this.#dirtyThisTurn) {
       this.#dirtyThisTurn = false;
+      this.#turnsSinceExtract = 0;
       return;
     }
+    this.#turnsSinceExtract++;
+    if (!options.force && this.#turnsSinceExtract < EXTRACT_INTERVAL) return;
+    this.#turnsSinceExtract = 0;
     const dialogue = this.#formatRecentMessages(messages);
     if (!dialogue.trim()) return;
 
