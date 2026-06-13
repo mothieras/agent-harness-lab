@@ -53,3 +53,13 @@ export function optionalArrayOfIntegers(
 		(value) => typeof value === "number" && Number.isInteger(value),
 	) as number[];
 }
+
+export function optionalArrayOfStrings(
+	input: ToolInput,
+	key: string,
+): string[] | undefined {
+	if (!hasOwn(input, key)) return undefined;
+	const raw = input[key];
+	if (!Array.isArray(raw)) return undefined;
+	return raw.filter((value) => typeof value === "string") as string[];
+}

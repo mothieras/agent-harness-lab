@@ -328,7 +328,7 @@ test("agentLoop returns an error result when reactive compaction fails", async (
   }
 });
 
-test("agentLoop falls back to runtime tool definitions when options omit tools", async () => {
+test("agentLoop uses the runtime's tool definitions when the agent sets no allowedTools", async () => {
   const originalCreate = client.messages.create;
   const fallbackTool = toolDefinition("fallback_tool");
   let observedTools: Anthropic.Messages.MessageCreateParams["tools"];

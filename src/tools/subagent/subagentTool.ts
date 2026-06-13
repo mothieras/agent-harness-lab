@@ -1,10 +1,11 @@
-import { optionalInteger, requireNonEmptyString } from "../input.js";
+import { optionalArrayOfStrings, optionalInteger, requireNonEmptyString } from "../input.js";
 import type {
   SubAgentRunOptions,
   SubAgentRunner,
 } from "./subAgentRunner.js";
 import type { CheckPermissionFn } from "../../permission/types.js";
 import { builtinTool, type RegisteredTool } from "../types.js";
+import { currentAgent } from "../../agent.js";
 
 export function createSubagentTool(deps: {
   subAgentRunner: SubAgentRunner;
@@ -36,6 +37,12 @@ export function createSubagentTool(deps: {
             description:
               "Optional task id this subagent works on; echoed back when the result returns so you can correlate it.",
           },
+          allowed_tools: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Optional subset of the subagent tool profile (bash, read_file, write_file, edit_file, load_skill) to grant this child. Omit for the full profile; tools outside it are ignored.",
+          },
         },
         required: ["prompt"],
       },
@@ -43,6 +50,11 @@ export function createSubagentTool(deps: {
     (input) => {
       const prompt = requireNonEmptyString(input, "prompt", "subagent tool");
       if ("error" in prompt) return prompt.error;
+
+      const parent = currentAgent.getStore();
+      if (!parent) {
+        return "Error: subagent can only be spawned from within an agent loop.";
+      }
 
       const options: SubAgentRunOptions = {};
       const name = requireNonEmptyString(input, "name", "subagent tool");
@@ -55,9 +67,11 @@ export function createSubagentTool(deps: {
       if (maxTurns !== undefined) options.maxTurns = maxTurns;
       const timeoutMs = optionalInteger(input, "timeout_ms");
       if (timeoutMs !== undefined) options.timeoutMs = timeoutMs;
+      const allowedTools = optionalArrayOfStrings(input, "allowed_tools");
+      if (allowedTools !== undefined) options.allowedTools = allowedTools;
       if (deps.checkPermission) options.checkPermission = deps.checkPermission;
 
-      return deps.subAgentRunner.run(prompt.value, options);
+      return deps.subAgentRunner.run(parent, prompt.value, options);
     },
   );
 }

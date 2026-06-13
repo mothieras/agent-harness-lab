@@ -199,3 +199,84 @@ test("Agent with exactOptionalPropertyTypes — undefined optional fields don't 
     await rm(tmp, { recursive: true, force: true });
   }
 });
+
+test("Agent.fork shares toolRuntime, inherits config, isolates the conversation", async () => {
+  const tmp = await createTempDir();
+  try {
+    const registry = new ToolRegistry();
+    const taskManager = new TaskManager(tmp);
+    const bg = new BackgroundManager(tmp);
+    const runtime = new ToolRuntime({ registry, taskManager, backgroundManager: bg });
+    const hooks = new HookBus();
+    const checkPermission = async () => ({ allowed: true });
+
+    const parent = new Agent({
+      toolRuntime: runtime,
+      hooks,
+      checkPermission,
+      workspaceRoot: "/tmp/ws",
+      system: "parent system",
+      messages: [{ role: "user", content: "parent turn" }],
+    });
+
+    const child = parent.fork({
+      name: "child",
+      maxTurns: 16,
+      allowedTools: ["bash"],
+      system: "child system",
+      messages: [{ role: "user", content: "child task" }],
+    });
+
+    // shared — same reference
+    assert.equal(child.toolRuntime, parent.toolRuntime);
+    // inherited from the parent (not overridden)
+    assert.equal(child.checkPermission, checkPermission);
+    assert.equal(child.workspaceRoot, "/tmp/ws");
+    // hooks are NOT inherited — a forked child is silent by default
+    assert.equal(child.hooks, undefined);
+    // isolated — taken only from overrides
+    assert.equal(child.name, "child");
+    assert.equal(child.maxTurns, 16);
+    assert.deepEqual(child.allowedTools, ["bash"]);
+    assert.equal(child.system, "child system");
+    assert.deepEqual(child.messages, [{ role: "user", content: "child task" }]);
+    // the parent's conversation is untouched by the child
+    assert.deepEqual(parent.messages, [{ role: "user", content: "parent turn" }]);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Agent.fork: overrides win; omitted isolated fields fall back to defaults, not the parent", async () => {
+  const tmp = await createTempDir();
+  try {
+    const registry = new ToolRegistry();
+    const taskManager = new TaskManager(tmp);
+    const bg = new BackgroundManager(tmp);
+    const runtime = new ToolRuntime({ registry, taskManager, backgroundManager: bg });
+    const parentHooks = new HookBus();
+    const childHooks = new HookBus();
+
+    const parent = new Agent({
+      toolRuntime: runtime,
+      hooks: parentHooks,
+      workspaceRoot: "/tmp/parent",
+      maxTurns: 50,
+    });
+
+    // explicit hooks override is honoured
+    const overridden = parent.fork({ hooks: childHooks, workspaceRoot: "/tmp/child" });
+    assert.equal(overridden.hooks, childHooks);
+    assert.equal(overridden.workspaceRoot, "/tmp/child");
+
+    // omitted: hooks are NOT inherited (silent child); other inherited fields still are
+    const bare = parent.fork();
+    assert.equal(bare.hooks, undefined);
+    assert.equal(bare.workspaceRoot, "/tmp/parent");
+    // isolated field omitted -> Agent default (200), NOT the parent's 50
+    assert.equal(bare.maxTurns, 200);
+    assert.deepEqual(bare.messages, []);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});

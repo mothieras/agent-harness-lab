@@ -11,7 +11,6 @@ import { buildSystemPrompt } from "../prompt/assembler.js";
 import type { PromptContext } from "../prompt/assembler.js";
 import { createPermissionChecker } from "../permission/permission.js";
 import type { AskUserFn, CheckPermissionFn } from "../permission/types.js";
-import { agentIdentity } from "../tools/identity.js";
 import { logToolResult } from "./toolLog.js";
 
 type LeadTurnOptions = {
@@ -116,6 +115,7 @@ export async function runCli(): Promise<void> {
   });
 
   const leadAgent = new Agent({
+    id: "lead",
     system: systemPrompt,
     workspaceRoot: app.workspaceRoot,
     toolRuntime: app.toolRuntime,
@@ -123,7 +123,9 @@ export async function runCli(): Promise<void> {
     checkPermission,
   });
 
-  const history: Anthropic.Messages.MessageParam[] = [];
+  // Single source of truth: the loop mutates leadAgent.messages, so /compact
+  // and memory extraction must read that same array, not a parallel copy.
+  const history = leadAgent.messages;
   try {
     while (!closed) {
       const query = await ask("\x1b[36magent >> \x1b[0m");
@@ -139,7 +141,6 @@ export async function runCli(): Promise<void> {
         if (result === "exit") break;
         continue;
       }
-      history.push({ role: "user", content: query });
       leadAgent.messages.push({ role: "user", content: query });
       await runLeadTurn({ app, agent: leadAgent, history });
 
@@ -163,7 +164,7 @@ export async function runCli(): Promise<void> {
 
 async function runLeadTurn(options: LeadTurnOptions): Promise<void> {
 	const { app, agent, history } = options;
-	const result = await agentIdentity.run("lead", () => agentLoop(agent));
+	const result = await agentLoop(agent);
 	console.log(describeFinalResponse(result.content, result.stopReason));
 	printTaskStatus(app);
 	console.log();

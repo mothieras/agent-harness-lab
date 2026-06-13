@@ -47,7 +47,7 @@ export function createAppContext(
     backgroundManager,
     registry: toolRegistry,
   });
-  const subAgentRunner = new SubAgentRunner(toolRuntime, hooks, workspaceRoot);
+  const subAgentRunner = new SubAgentRunner();
   const builtinTools = loadBuiltinTools({
     workspaceRoot,
     skillLoader,

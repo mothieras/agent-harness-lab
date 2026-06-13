@@ -14,7 +14,7 @@ import type { AgentLoopResult, AgentLoopStopReason } from "./options.js";
 import type { ToolResultReadyBlock } from "../hooks/hookBus.js";
 import { client, getFallbackModel, MODEL } from "../config.js";
 import { autoCompactIfNeeded, forceCompact, microCompact } from "./compact.js";
-import { Agent } from "../agent.js";
+import { Agent, currentAgent } from "../agent.js";
 import {
   decideRecovery,
   initialRecoveryState,
@@ -54,9 +54,13 @@ function requireSuccessOutcome(
   };
 }
 
-export async function agentLoop(
-  agent: Agent,
-): Promise<AgentLoopResult> {
+export async function agentLoop(agent: Agent): Promise<AgentLoopResult> {
+  // Bind the agent to the async context for the whole run so tools dispatched
+  // inside the loop (e.g. `subagent`) can fork the agent that invoked them.
+  return currentAgent.run(agent, () => agentLoopInner(agent));
+}
+
+async function agentLoopInner(agent: Agent): Promise<AgentLoopResult> {
   const messages = agent.messages;
   const toolRuntime = agent.toolRuntime;
   const timeoutMs = agent.timeoutMs;

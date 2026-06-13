@@ -1,14 +1,10 @@
 import crypto from "node:crypto";
-import { runSubAgent } from "./subagent.js";
+import type { Agent } from "../../agent.js";
+import { agentLoop } from "../../loop/loop.js";
+import { describeFinalResponse } from "../../loop/response.js";
+import { forkSubAgent } from "./subagent.js";
 import type { SubAgentOptions } from "./subagent.js";
-import {
-  DEFAULT_SUB_AGENT_MAX_TURNS,
-  DEFAULT_SUB_AGENT_TIMEOUT_MS,
-} from "../../loop/options.js";
-import { agentIdentity } from "../identity.js";
-import type { HookBus } from "../../hooks/hookBus.js";
 import type { CheckPermissionFn } from "../../permission/types.js";
-import type { ToolRuntime } from "../runtime.js";
 
 type SubStatus = "running" | "completed" | "error";
 
@@ -16,6 +12,8 @@ interface SubTask {
   status: SubStatus;
   result: string | null;
   prompt: string;
+  /** The live child agent instance — its messages are the subagent's conversation. */
+  agent: Agent;
   taskId?: string;
 }
 
@@ -34,6 +32,7 @@ export type SubAgentRunOptions = {
   timeoutMs?: number;
   taskId?: string;
   checkPermission?: CheckPermissionFn;
+  allowedTools?: readonly string[];
 };
 
 const DEFAULT_MAX_CONCURRENT = 3;
@@ -42,36 +41,35 @@ export class SubAgentRunner {
   private subs = new Map<string, SubTask>();
   private notifications: SubNotification[] = [];
 
-  constructor(
-    private readonly toolRuntime: ToolRuntime,
-    private readonly hooks: HookBus,
-    private readonly workspaceRoot: string,
-    private readonly maxConcurrent: number = DEFAULT_MAX_CONCURRENT,
-  ) {}
+  constructor(private readonly maxConcurrent: number = DEFAULT_MAX_CONCURRENT) {}
 
-  run(prompt: string, options: SubAgentRunOptions = {}): string {
+  run(parent: Agent, prompt: string, options: SubAgentRunOptions = {}): string {
     if (this.runningCount() >= this.maxConcurrent) {
       return `Error: too many running subagents (max ${this.maxConcurrent}). Wait for one to finish.`;
     }
 
     const subId = crypto.randomUUID().slice(0, 8);
-    const entry: SubTask = { status: "running", result: null, prompt };
+
+    const forkOptions: SubAgentOptions = {};
+    if (options.name) forkOptions.name = options.name;
+    if (options.role) forkOptions.role = options.role;
+    if (options.maxTurns !== undefined) forkOptions.maxTurns = options.maxTurns;
+    if (options.timeoutMs !== undefined) forkOptions.timeoutMs = options.timeoutMs;
+    if (options.checkPermission) forkOptions.checkPermission = options.checkPermission;
+    if (options.allowedTools) forkOptions.allowedTools = options.allowedTools;
+
+    const child = forkSubAgent(parent, subId, prompt, forkOptions);
+
+    const entry: SubTask = { status: "running", result: null, prompt, agent: child };
     if (options.taskId) entry.taskId = options.taskId;
     this.subs.set(subId, entry);
 
-    const subOptions: SubAgentOptions = {
-      hooks: this.hooks,
-      workspaceRoot: this.workspaceRoot,
-      maxTurns: options.maxTurns ?? DEFAULT_SUB_AGENT_MAX_TURNS,
-      timeoutMs: options.timeoutMs ?? DEFAULT_SUB_AGENT_TIMEOUT_MS,
-    };
-    if (options.name) subOptions.name = options.name;
-    if (options.role) subOptions.role = options.role;
-    if (options.checkPermission) subOptions.checkPermission = options.checkPermission;
-
-    void agentIdentity
-      .run(subId, () => runSubAgent(prompt, this.toolRuntime, subOptions))
-      .then((result) => this.settle(subId, "completed", result))
+    // No identity wrapper needed: agentLoop binds `currentAgent` to `child`,
+    // and child.id === subId, so per-agent hook state keys correctly.
+    void agentLoop(child)
+      .then(({ content, stopReason }) =>
+        this.settle(subId, "completed", describeFinalResponse(content, stopReason)),
+      )
       .catch((error) =>
         this.settle(
           subId,
@@ -87,7 +85,9 @@ export class SubAgentRunner {
     if (subId) {
       const t = this.subs.get(subId);
       if (!t) return `Error: Unknown subagent ${subId}`;
-      return `[${t.status}] ${t.prompt.slice(0, 60)}\n${t.result ?? "(running)"}`;
+      const detail =
+        t.result ?? `(running — ${t.agent.messages.length} messages so far)`;
+      return `[${t.status}] ${t.prompt.slice(0, 60)}\n${detail}`;
     }
     if (this.subs.size === 0) return "No subagents.";
     const lines: string[] = [];

@@ -9,12 +9,12 @@ import { client } from "../src/config.js";
 import { createAppContext } from "../src/app/context.js";
 import { pushTaggedUserMessage } from "../src/hooks/messageInjection.js";
 import { registerRuntimeHooks } from "../src/hooks/runtimeHooks.js";
-import { runSubAgent } from "../src/tools/subagent/subagent.js";
+import { forkSubAgent } from "../src/tools/subagent/subagent.js";
 import { SubAgentRunner } from "../src/tools/subagent/subAgentRunner.js";
+import { Agent, currentAgent } from "../src/agent.js";
 import { hasPendingAsyncWork, safeQuestion } from "../src/cli/index.js";
 import { PROMPT_SECTIONS } from "../src/prompt/sections.js";
 import { BackgroundManager } from "../src/tools/background/backgroundManager.js";
-import { agentIdentity } from "../src/tools/identity.js";
 import { requireNonEmptyString } from "../src/tools/input.js";
 import { ToolRegistry } from "../src/tools/registry.js";
 import { ToolRuntime } from "../src/tools/runtime.js";
@@ -55,7 +55,7 @@ function createRuntime(workspaceRoot: string): ToolRuntime {
   const taskManager = new TaskManager(path.join(workspaceRoot, ".tasks"));
   const backgroundManager = new BackgroundManager(workspaceRoot);
   const runtime = new ToolRuntime({ taskManager, backgroundManager, registry });
-  const subAgentRunner = new SubAgentRunner(runtime, new HookBus(), workspaceRoot);
+  const subAgentRunner = new SubAgentRunner();
   const builtin = loadBuiltinTools({
     workspaceRoot,
     skillLoader: { getContent: () => "", getDescriptions: () => "" },
@@ -96,7 +96,7 @@ test("loadBuiltinTools returns complete RegisteredTool entries", async () => {
     const backgroundManager = new BackgroundManager(workspace);
     const registry = new ToolRegistry();
     const runtime = new ToolRuntime({ taskManager, backgroundManager, registry });
-    const subAgentRunner = new SubAgentRunner(runtime, new HookBus(), workspace);
+    const subAgentRunner = new SubAgentRunner();
     const builtin = loadBuiltinTools({
       workspaceRoot: workspace,
       skillLoader: { getContent: () => "", getDescriptions: () => "" },
@@ -151,6 +151,28 @@ test("tool profile validation reports unknown allowed tools", () => {
       }),
     /Tool profile 'reviewer' references unknown tool\(s\): missing_tool/,
   );
+});
+
+test("registry.getDefinitions fails fast on an unknown allowed tool", () => {
+  const registry = new ToolRegistry();
+  registry.register(testTool("read_file", () => "ok"));
+
+  assert.throws(
+    () => registry.getDefinitions(["read_file", "nope"]),
+    /Unknown allowed tool\(s\): nope/,
+  );
+});
+
+test("subagent tool errors when invoked outside an agent loop", async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
+  try {
+    const app = createAppContext(workspace);
+    // No surrounding currentAgent.run → no parent in the async context.
+    const out = await app.toolRuntime.invokeTool("subagent", { prompt: "x" });
+    assert.match(String(out), /within an agent loop/);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
 });
 
 test("HookBus instances do not share registered callbacks", () => {
@@ -329,7 +351,7 @@ test("default orchestration exposes subagent and check_subagent but not teammate
   }
 });
 
-test("subagent schema accepts optional role, name, and task_id", async () => {
+test("subagent schema accepts optional role, name, task_id, and allowed_tools", async () => {
   const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
   try {
     const app = createAppContext(workspace);
@@ -340,7 +362,7 @@ test("subagent schema accepts optional role, name, and task_id", async () => {
     assert.ok(subagent);
     assert.deepEqual(
       Object.keys(subagent.input_schema.properties ?? {}).sort(),
-      ["max_turns", "name", "prompt", "role", "task_id", "timeout_ms"],
+      ["allowed_tools", "max_turns", "name", "prompt", "role", "task_id", "timeout_ms"],
     );
   } finally {
     await rm(workspace, { recursive: true, force: true });
@@ -354,8 +376,13 @@ test("subagent tool returns a sub_id immediately and check_subagent reports it",
   const workspace = await mkdtemp(path.join(tmpdir(), "agent-runtime-"));
   try {
     const app = createAppContext(workspace);
+    const lead = new Agent({
+      toolRuntime: app.toolRuntime,
+      hooks: app.hooks,
+      workspaceRoot: workspace,
+    });
 
-    const out = await agentIdentity.run("lead", () =>
+    const out = await currentAgent.run(lead, () =>
       app.toolRuntime.invokeTool("subagent", { prompt: "research X" }),
     );
     assert.match(out, /Subagent \w+ started/);
@@ -373,9 +400,7 @@ test("subagent tool returns a sub_id immediately and check_subagent reports it",
   }
 });
 
-test("runSubAgent includes optional role and name in system prompt", async () => {
-  const originalCreate = client.messages.create;
-  let observedSystem: Anthropic.Messages.MessageCreateParams["system"];
+test("forkSubAgent puts role/name/workspace into the child's system prompt", () => {
   const tools = ["bash", "read_file", "write_file", "edit_file", "load_skill"].map(
     toolDefinition,
   );
@@ -383,26 +408,50 @@ test("runSubAgent includes optional role and name in system prompt", async () =>
     getToolDefinitions: () => tools,
     invokeTool: async () => "",
   };
+  const parent = new Agent({
+    toolRuntime: runtime as never,
+    workspaceRoot: "/tmp/workspace",
+  });
 
-  client.messages.create = (async (params: Anthropic.Messages.MessageCreateParams) => {
-    observedSystem = params.system;
-    return textResponse("review complete");
-  }) as typeof client.messages.create;
+  const child = forkSubAgent(parent, "rev-1", "review docs", {
+    name: "reviewer",
+    role: "code reviewer",
+  });
 
-  try {
-    const result = await runSubAgent("review docs", runtime as never, {
-      workspaceRoot: "/tmp/workspace",
-      name: "reviewer",
-      role: "code reviewer",
-    });
+  assert.match(child.system, /reviewer/);
+  assert.match(child.system, /code reviewer/);
+  assert.match(child.system, /\/tmp\/workspace/);
+  assert.deepEqual(child.messages, [{ role: "user", content: "review docs" }]);
+});
 
-    assert.match(result, /review complete/);
-    assert.match(String(observedSystem), /reviewer/);
-    assert.match(String(observedSystem), /code reviewer/);
-    assert.match(String(observedSystem), /\/tmp\/workspace/);
-  } finally {
-    client.messages.create = originalCreate;
-  }
+test("forkSubAgent narrows allowedTools to the profile and never widens it", () => {
+  const tools = ["bash", "read_file", "write_file", "edit_file", "load_skill"].map(
+    toolDefinition,
+  );
+  const runtime = {
+    getToolDefinitions: () => tools,
+    invokeTool: async () => "",
+  };
+  const parent = new Agent({ toolRuntime: runtime as never, workspaceRoot: "/tmp/ws" });
+
+  // narrowing: requested ∩ profile
+  assert.deepEqual(
+    forkSubAgent(parent, "r1", "read", { allowedTools: ["read_file"] }).allowedTools,
+    ["read_file"],
+  );
+  // widening is impossible: tools outside the profile (e.g. `subagent`) are dropped
+  assert.deepEqual(
+    forkSubAgent(parent, "r2", "escalate", { allowedTools: ["bash", "subagent"] }).allowedTools,
+    ["bash"],
+  );
+  // omitted -> the full profile
+  assert.deepEqual(forkSubAgent(parent, "r3", "work").allowedTools, [
+    "bash",
+    "read_file",
+    "write_file",
+    "edit_file",
+    "load_skill",
+  ]);
 });
 
 test("safeQuestion returns null when readline has already closed", async () => {
@@ -428,8 +477,11 @@ test("default prompt guides parallel subagent delegation", () => {
   assert.doesNotMatch(guidelines ?? "", /Use teammate/);
 });
 
-test("agent identity is available outside the tool runtime dispatcher", () => {
-  const result = agentIdentity.run("reviewer", () => agentIdentity.getStore());
+test("the executing agent and its id are available via the currentAgent ALS", () => {
+  const result = currentAgent.run(
+    new Agent({ id: "reviewer", toolRuntime: {} as never }),
+    () => currentAgent.getStore()?.id,
+  );
 
   assert.equal(result, "reviewer");
 });
@@ -467,23 +519,30 @@ test("subagent results inject in lead context only, not in subagent context", as
     const app = createAppContext(workspace);
     registerRuntimeHooks(app);
 
-    agentIdentity.run("lead", () => app.subAgentRunner.run("do thing"));
+    const lead = new Agent({
+      id: "lead",
+      toolRuntime: app.toolRuntime,
+      hooks: app.hooks,
+      workspaceRoot: workspace,
+    });
+    app.subAgentRunner.run(lead, "do thing");
     while (app.subAgentRunner.hasRunning()) {
       await new Promise((resolve) => setImmediate(resolve));
     }
 
     // Non-lead context must NOT drain the lead's subagent results.
     const subMessages: Anthropic.Messages.MessageParam[] = [];
-    agentIdentity.run("worker-1", () =>
-      app.hooks.emitEffect("PreLLMCall", subMessages),
-    );
+    const worker = new Agent({
+      id: "worker-1",
+      toolRuntime: app.toolRuntime,
+      workspaceRoot: workspace,
+    });
+    currentAgent.run(worker, () => app.hooks.emitEffect("PreLLMCall", subMessages));
     assert.doesNotMatch(JSON.stringify(subMessages), /subagent-results/);
 
     // Lead context drains and injects the (still-present) result.
     const leadMessages: Anthropic.Messages.MessageParam[] = [];
-    agentIdentity.run("lead", () =>
-      app.hooks.emitEffect("PreLLMCall", leadMessages),
-    );
+    currentAgent.run(lead, () => app.hooks.emitEffect("PreLLMCall", leadMessages));
     const leadText = JSON.stringify(leadMessages);
     assert.match(leadText, /subagent-results/);
     assert.match(leadText, /sub result payload/);
@@ -502,7 +561,13 @@ test("hasPendingAsyncWork reflects running subagents", async () => {
     const app = createAppContext(workspace);
 
     assert.equal(hasPendingAsyncWork(app), false);
-    agentIdentity.run("lead", () => app.subAgentRunner.run("work"));
+    const lead = new Agent({
+      id: "lead",
+      toolRuntime: app.toolRuntime,
+      hooks: app.hooks,
+      workspaceRoot: workspace,
+    });
+    app.subAgentRunner.run(lead, "work");
     assert.equal(hasPendingAsyncWork(app), true);
 
     while (app.subAgentRunner.hasRunning()) {

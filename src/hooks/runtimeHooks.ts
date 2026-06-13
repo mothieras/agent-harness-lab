@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AppContext } from "../app/context.js";
 import { pushTaggedUserMessage } from "./messageInjection.js";
-import { agentIdentity } from "../tools/identity.js";
+import { currentAgent } from "../agent.js";
 import type { ToolResultReadyBlock } from "./hookBus.js";
 
 type TaskLoopState = {
@@ -21,7 +21,7 @@ function newTaskLoopState(): TaskLoopState {
 }
 
 function agentName(): string {
-	return agentIdentity.getStore() ?? "lead";
+	return currentAgent.getStore()?.id ?? "lead";
 }
 
 export function registerRuntimeHooks(app: AppContext): void {

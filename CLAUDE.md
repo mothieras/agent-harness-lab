@@ -15,7 +15,9 @@ pnpm start            # Run compiled output
 
 This is a minimal coding-agent runtime harness — it builds the core loop (model ↔ tools) from scratch so every piece is visible. It's **not a framework**; it's deliberately thin.
 
-**Entry point:** `src/main.ts` → `src/cli/index.ts` readline loop → `src/app/context.ts` app assembly → `src/loop/loop.ts`
+**Entry point:** `src/main.ts` → `src/cli/index.ts` readline loop (creates the lead `Agent`) → `src/app/context.ts` app assembly → `src/loop/loop.ts` `agentLoop(agent)`
+
+**Agent** (`src/agent.ts`): the `Agent` class bundles identity, config, services (`toolRuntime`, `hooks`, `checkPermission`), and conversation `messages` into one object. `agentLoop(agent)` reads everything off the instance and binds the running agent into `currentAgent` (an `AsyncLocalStorage`) so tools can fork their caller. Sub-agents are derived with `parent.fork(overrides)` — same class, with an explicit share (`toolRuntime`) / inherit (`workspaceRoot`, `checkPermission`) / isolate (conversation, tools, budgets, and `hooks` — a forked child is silent unless handed its own) split.
 
 **Core loop** (`src/loop/loop.ts`):
 1. Sends messages to the model with tools
@@ -31,7 +33,7 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 - `loop.ts` — the main agent loop; LLM call wrapped in outcome capture → `decideRecovery()` → switch on recovery action; tool errors caught per-invocation
 - `recovery.ts` — pure decision function maps `(outcome, state, options)` to a `RecoveryAction` union; handles output truncation, context overflow, rate limits, overloads, transient network failures, and fallback-model switching after repeated 529s
 - `deadline.ts` — timeout/deadline utilities (AgentLoopTimeoutError, awaitWithDeadline, throwIfDeadlineExpired)
-- `options.ts` — AgentLoopOptions + normalizeAgentLoopOptions(); `AgentLoopStopReason` includes `"error"` for unrecoverable failures
+- `options.ts` — `AgentLoopResult` / `AgentLoopStopReason` types (`"error"` covers unrecoverable failures) plus default turn/timeout constants; per-agent config now lives on the `Agent` class (`src/agent.ts`)
 - `response.ts` — `describeFinalResponse()` for formatting agent output
 - `compact.ts` — micro-compact (per-turn result compression, >30k tokens), auto-compact (LLM summarization, >50k tokens), forceCompact (manual/recovery trigger)
 - `index.ts` — barrel for the loop's public surface
@@ -48,12 +50,11 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 - `profiles.ts` — centralized allowed tool set for the subagent loop plus profile validation and fail-fast tool-definition selection
 - `errors.ts` — tool error formatting (unsupported / unavailable / execution + generic `formatError`)
 - `input.ts` — shared tool input validation helpers (`requireString`, `requireInteger`, optional parsers)
-- `identity.ts` — AsyncLocalStorage identity context for lead/subagent execution
 - `<group>/` — one file per tool, each exposing a `createXTool(deps)` factory that declares only the services it needs; the group `index.ts` aggregates that group:
   - `file/` — `bash`/`read`/`write`/`edit` route through `file/safePath.ts` (resolves symlinks, enforces workspace containment); `file/shellSafety.ts` blocks dangerous commands
   - `task/` — `task_create`/`task_get`/`task_update`/`task_list`; `task/taskManager.ts` is JSON-file task persistence in `.tasks/` with status transitions and blocking deps
   - `background/` — `background_run`/`check_background`; `background/backgroundManager.ts` runs fire-and-forget shell commands with a notification queue
-  - `subagent/` — `subagent`/`check_subagent` builtin tools; `subagent/subAgentRunner.ts` (async, identity-isolated, never-rejecting runner) wraps `subagent/subagent.ts` (`runSubAgent`, a constrained `agentLoop`)
+  - `subagent/` — `subagent`/`check_subagent` builtin tools; `subagent/subAgentRunner.ts` (async, identity-isolated, never-rejecting runner; holds the live child `Agent`s) wraps `subagent/subagent.ts` (`forkSubAgent`, which forks the parent into a constrained agent)
   - `skill/` — `load_skill`; `skill/skillLoader.ts` two-layer skill injection
   - `memory/` — `update_memory`; `memory/memoryManager.ts` cross-session persistent memory in `.memory/`
 - `mcp/` — MCP-0 provider boundary: minimal `McpClient`, mock client, schema conversion, handler creation, result normalization, and diagnostics

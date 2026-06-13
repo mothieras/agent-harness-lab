@@ -9,7 +9,6 @@ import {
 import type { ToolRegistry } from "./registry.js";
 import type { RegisteredTool, ToolDefinition } from "./types.js";
 
-export { agentIdentity } from "./identity.js";
 export type { ToolHandler, ToolInput } from "./input.js";
 export type { RegisteredTool, ToolDefinition } from "./types.js";
 

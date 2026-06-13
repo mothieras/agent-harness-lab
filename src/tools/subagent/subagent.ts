@@ -1,13 +1,9 @@
-import { Agent } from "../../agent.js";
+import type { Agent } from "../../agent.js";
 import {
-  agentLoop,
   DEFAULT_SUB_AGENT_MAX_TURNS,
   DEFAULT_SUB_AGENT_TIMEOUT_MS,
-} from "../../loop/loop.js";
-import { describeFinalResponse } from "../../loop/response.js";
-import type { HookBus } from "../../hooks/hookBus.js";
+} from "../../loop/options.js";
 import type { CheckPermissionFn } from "../../permission/types.js";
-import type { ToolRuntime } from "../runtime.js";
 import { SUB_AGENT_ALLOWED_TOOLS } from "../profiles.js";
 
 export type SubAgentOptions = {
@@ -16,37 +12,48 @@ export type SubAgentOptions = {
   maxTurns?: number;
   timeoutMs?: number;
   checkPermission?: CheckPermissionFn;
-  hooks?: HookBus;
-  workspaceRoot?: string;
+  /** Optional narrowing of the subagent tool profile. Tools outside it are dropped. */
+  allowedTools?: readonly string[];
 };
 
-export function buildSubAgentSystemPrompt(options?: SubAgentOptions): string {
-  const workspace = options?.workspaceRoot ?? process.cwd();
+function buildSubAgentSystemPrompt(
+  workspaceRoot: string,
+  options?: SubAgentOptions,
+): string {
   const identity = options?.name ? ` named '${options.name}'` : "";
   const role = options?.role ? ` Your role is: ${options.role}.` : "";
-  return `You are a subagent${identity} at ${workspace}.${role} Complete the assigned task and report back concisely.`;
+  return `You are a subagent${identity} at ${workspaceRoot}.${role} Complete the assigned task and report back concisely.`;
 }
 
-export async function runSubAgent(
+/**
+ * Fork a constrained sub-agent from `parent`: a fresh conversation seeded with
+ * `prompt`, narrowed to the subagent tool profile, with shorter turn/timeout
+ * budgets. toolRuntime/hooks/workspaceRoot/checkPermission are inherited from
+ * the parent via {@link Agent.fork}; everything task-specific is isolated.
+ */
+export function forkSubAgent(
+  parent: Agent,
+  id: string,
   prompt: string,
-  toolRuntime: ToolRuntime,
   options?: SubAgentOptions,
-): Promise<string> {
-  const subAgent = new Agent({
+): Agent {
+  // A child may only narrow the subagent profile, never widen it: requested ∩
+  // profile. This keeps child tool access ⊆ the profile (and since the profile
+  // excludes `subagent`, a child can never spawn grandchildren).
+  const requested = options?.allowedTools;
+  const allowedTools = requested
+    ? SUB_AGENT_ALLOWED_TOOLS.filter((tool) => requested.includes(tool))
+    : SUB_AGENT_ALLOWED_TOOLS;
+
+  return parent.fork({
+    id,
     name: options?.name,
     role: options?.role,
     maxTurns: options?.maxTurns ?? DEFAULT_SUB_AGENT_MAX_TURNS,
     timeoutMs: options?.timeoutMs ?? DEFAULT_SUB_AGENT_TIMEOUT_MS,
-    allowedTools: SUB_AGENT_ALLOWED_TOOLS,
-    system: buildSubAgentSystemPrompt(options),
-    workspaceRoot: options?.workspaceRoot,
-    toolRuntime,
-    hooks: options?.hooks,
+    allowedTools,
+    system: buildSubAgentSystemPrompt(parent.workspaceRoot, options),
     checkPermission: options?.checkPermission,
     messages: [{ role: "user", content: prompt }],
   });
-
-  const { content, stopReason } = await agentLoop(subAgent);
-
-  return describeFinalResponse(content, stopReason);
 }
