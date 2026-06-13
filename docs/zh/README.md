@@ -8,6 +8,7 @@
 
 ## 已构建内容
 
+- **Agent 模型** —— 单个 `Agent` 类承载身份、配置、共享服务引用（工具运行时、hooks、权限）和会话；子 Agent 通过 `parent.fork()` 派生，遵循显式的 共享 / 继承 / 隔离 切分，因此 fork 不会泄漏父级状态
 - **Agent 循环** —— model ↔ tools 核心循环，包含 max_turns 和截止时间约束
 - **工具系统** —— 每个文件一个工具，按功能分组（文件操作、任务跟踪、后台任务、异步子 Agent 委托、技能、记忆），通过单个 `loadBuiltinTools` 提供者组合
 - **系统提示** —— 按稳定性排序的节组装（soul → guidelines → skills → memory）
@@ -23,7 +24,7 @@
 
 ## 源码布局
 
-- `src/main.ts` → `src/cli/index.ts` → `src/app/context.ts` → `src/loop/loop.ts` 是正常的启动路径
+- `src/main.ts` → `src/cli/index.ts`（创建 lead `Agent`）→ `src/app/context.ts` → `src/loop/loop.ts` 是正常的启动路径
 - `src/loop/` —— 核心循环、恢复决策、选项、截止时间、上下文压缩、响应格式化
 - `src/prompt/` —— 系统提示节和按稳定性排序的组装
 - `src/permission/` —— 三道门禁权限管道（拒绝列表、规则、用户审批）
@@ -35,7 +36,7 @@
 ## 运行时流程
 
 1. `createAppContext()` 构建管理器，然后 `ToolRegistry` → `ToolRuntime` → `SubAgentRunner`，接着加载内置 `RegisteredTool[]`（包括 `subagent`/`check_subagent`）以及任何预加载的提供者结果，并验证允许的工具配置文件。
-2. `agentLoop()` 接收工具定义，仅负责 model/tool 协议编排。
+2. `agentLoop(agent)` 从 `Agent` 读取工具、系统提示、hooks、预算和会话，将其绑定到 `currentAgent` 供本次运行使用，仅负责 model/tool 协议编排。
 3. 工具执行经过 `ToolRuntime.invokeTool()` → `ToolRegistry.getHandler()`。
 4. 子 Agent 循环使用集中式允许的工具配置文件；未知的允许工具名称会快速失败，而不是被静默过滤。
 

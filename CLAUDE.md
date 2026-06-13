@@ -19,6 +19,20 @@ This is a minimal coding-agent runtime harness — it builds the core loop (mode
 
 **Agent** (`src/agent.ts`): the `Agent` class bundles identity, config, services (`toolRuntime`, `hooks`, `checkPermission`), and conversation `messages` into one object. `agentLoop(agent)` reads everything off the instance and binds the running agent into `currentAgent` (an `AsyncLocalStorage`) so tools can fork their caller. Sub-agents are derived with `parent.fork(overrides)` — same class, with an explicit share (`toolRuntime`) / inherit (`workspaceRoot`, `checkPermission`) / isolate (conversation, tools, budgets, and `hooks` — a forked child is silent unless handed its own) split.
 
+**Dependency direction & the `currentAgent` reverse edge** — the invariant to keep intact:
+
+```text
+cli → createAppContext() → [process-level singletons: registry, runtime, subAgentRunner,
+                            hooks, skill / memory / task / background managers]
+cli → new Agent({ toolRuntime, hooks, checkPermission, … })   ← Agent holds refs, owns no service
+        └─ agentLoop(agent): currentAgent.run(agent, …)        ← sole identity binder
+              └─ tool_use → toolRuntime.invokeTool() → registry handler
+                    └─ subagent tool: currentAgent.getStore() ──reverse──→ parent
+                          └─ subAgentRunner.run(parent) → forkSubAgent → parent.fork()
+```
+
+`Agent → ToolRuntime` (the agent holds a runtime reference), but `ToolRuntime` / `ToolRegistry` / every tool **never import `Agent`**. A tool that must act on the agent that invoked it (e.g. `subagent`) reads `currentAgent.getStore()` — a reverse edge carried by `AsyncLocalStorage`, not a type import, so there's no `Agent ↔ ToolRuntime` import cycle. The cost: this edge isn't in any signature, so such tools must guard (the `subagent` tool errors when `currentAgent` is unset). `agentLoop` is the *sole* place `currentAgent` is bound and per-agent identity (`agent.id`, default `"lead"`) is established.
+
 **Core loop** (`src/loop/loop.ts`):
 1. Sends messages to the model with tools
 2. Captures model responses/errors as an `LLMOutcome`, asks `decideRecovery()` for a `RecoveryAction`, then applies that action in the loop

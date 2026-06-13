@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Supersedes [0005](0005-stable-subagent-orchestration.md) for the subagent execution model (synchronous → asynchronous). The role/name metadata, teammate deferral, and CLI readline-lifecycle decisions from 0005 remain in force. Note: the `src/agent/` paths below were later relocated to `src/tools/subagent/` by [0007](0007-tool-structure-and-layout-overhaul.md); the design is unchanged.
+Accepted. Supersedes [0005](0005-stable-subagent-orchestration.md) for the subagent execution model (synchronous → asynchronous). The role/name metadata, teammate deferral, and CLI readline-lifecycle decisions from 0005 remain in force. Note: the `src/agent/` paths below were later relocated to `src/tools/subagent/` by [0007](0007-tool-structure-and-layout-overhaul.md); the design is unchanged. Note: the identity-isolation mechanism described below (`agentIdentity.run(subId, …)`) and the `runSubAgent` wrapper were later replaced by an `Agent` object, `parent.fork()`, and a single `currentAgent` ALS — see [0008](0008-agent-object-model.md). The async execution model (runner, host auto-wake, never-rejects, lead-only drain, concurrency cap, no nested subagents) is unchanged.
 
 ## Context
 

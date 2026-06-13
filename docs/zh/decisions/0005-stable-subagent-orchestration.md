@@ -4,7 +4,7 @@
 
 ## 状态
 
-已接受，随后在 subagent 执行模型（同步 → 异步）方面被 [0006](0006-async-subagent-runner.md) 取代。下方的 role/name 元数据、teammate 推迟以及 CLI readline 生命周期决策仍然有效。
+已接受，随后在 subagent 执行模型（同步 → 异步）方面被 [0006](0006-async-subagent-runner.md) 取代。下方的 role/name 元数据、teammate 推迟以及 CLI readline 生命周期决策仍然有效。注：下方的 `runSubAgent` 后来被 `forkSubAgent` 取代，后者 fork 父 `Agent`——见 [0008](0008-agent-object-model.md)；注入子系统提示的 role/name 保持不变。
 
 ## 背景
 

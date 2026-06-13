@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted, then superseded by [0006](0006-async-subagent-runner.md) for the subagent execution model (synchronous → asynchronous). The role/name metadata, teammate deferral, and CLI readline-lifecycle decisions below remain in force.
+Accepted, then superseded by [0006](0006-async-subagent-runner.md) for the subagent execution model (synchronous → asynchronous). The role/name metadata, teammate deferral, and CLI readline-lifecycle decisions below remain in force. Note: `runSubAgent` (below) was later replaced by `forkSubAgent`, which forks the parent `Agent` — see [0008](0008-agent-object-model.md); role/name injection into the child system prompt is unchanged.
 
 ## Context
 

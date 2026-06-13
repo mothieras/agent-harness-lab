@@ -40,6 +40,13 @@
 
 - **方向：** 随着各个工具积累真正的逻辑，为每个工具工厂添加有针对性的单元测试。结构契约测试（`tests/builtin-tool-ownership.test.ts`）已经在守卫布局。
 
+### 6. 子 Agent 运行期间不可观测
+
+被 fork 的子 Agent 静默运行：`Agent.fork` 不继承 lead 的 `HookBus`（它是属于 lead 的宿主交互装置——共享它会把子 Agent 的工具日志泄漏进 lead 的输出）。因此子 Agent 运行时，`check_subagent` 只能报告其消息数，而非实际进度，后台子 Agent 的工作也没有流式输出到任何地方。
+
+- **为什么重要：** 在并发子 Agent 的情况下，用户在子 Agent 落定前对每个子 Agent 在做什么是盲的。
+- **方向：** 一个按 Agent 的输出汇（前台流式 vs 后台静默，外加一种呈现哪些子 Agent 正在运行的方式）——等到有 TUI 来渲染它时。推迟而非放弃：`Agent.fork` 上的 `hooks` 字段就是子 Agent 自己的输出汇要接入的接缝。见 [0008](../decisions/0008-agent-object-model.md)。
+
 ## 有意的非目标（非限制）
 
 这些是刻意的，与项目作为一个薄的、可读的 harness 而非框架保持一致：

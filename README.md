@@ -13,6 +13,7 @@ added independently.
 
 ## What's Built
 
+- **Agent Model** — a single `Agent` class carries identity, config, shared service references (tool runtime, hooks, permission), and conversation; sub-agents are derived with `parent.fork()` under an explicit share / inherit / isolate split, so a fork can't leak the parent's state
 - **Agent Loop** — model ↔ tools core loop with max_turns and deadline enforcement
 - **Tool System** — one file per tool, grouped by function (file ops, task tracking, background tasks, async subagent delegation, skills, memory), composed through a single `loadBuiltinTools` provider
 - **System Prompt** — stability-ordered section assembly (soul → guidelines → skills → memory)
@@ -28,7 +29,7 @@ added independently.
 
 ## Source Layout
 
-- `src/main.ts` → `src/cli/index.ts` → `src/app/context.ts` → `src/loop/loop.ts` is the normal startup path
+- `src/main.ts` → `src/cli/index.ts` (creates the lead `Agent`) → `src/app/context.ts` → `src/loop/loop.ts` is the normal startup path
 - `src/loop/` — core loop, recovery decisions, options, deadline, context compaction, response formatting
 - `src/prompt/` — system prompt sections and stability-ordered assembly
 - `src/permission/` — three-gate permission pipeline (deny list, rules, user approval)
@@ -40,7 +41,7 @@ added independently.
 ## Runtime Flow
 
 1. `createAppContext()` builds managers, then `ToolRegistry` → `ToolRuntime` → `SubAgentRunner`, then loads builtin `RegisteredTool[]` (including `subagent`/`check_subagent`) plus any preloaded provider results, and validates allowed tool profiles.
-2. `agentLoop()` receives tool definitions and only owns model/tool protocol orchestration.
+2. `agentLoop(agent)` reads tools, system prompt, hooks, budgets, and conversation off the `Agent`, binds it into `currentAgent` for the run, and owns only model/tool protocol orchestration.
 3. Tool execution goes through `ToolRuntime.invokeTool()` → `ToolRegistry.getHandler()`.
 4. Subagent loops use centralized allowed tool profiles; unknown allowed tool names fail fast instead of being silently filtered.
 

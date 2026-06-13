@@ -17,14 +17,14 @@ src/main.ts
 
 `createAppContext()` 是组合根。它构建长生命周期服务、从提供者加载工具、注册它们、验证工具配置文件并构造 `ToolRuntime`。
 
-Agent 循环不加载提供者。它接收工具定义，并在模型请求工具时调用 `ToolRuntime.invokeTool()`。
+Agent 循环不加载提供者。它接收一个 `Agent`——后者携带工具定义、系统提示、预算和会话——并在模型请求工具时调用 `ToolRuntime.invokeTool()`。
 
 ## 应用组合
 
 `src/app/context.ts` 负责启动组装，按依赖顺序：
 
 - 构建 `SkillLoader`、`MemoryManager`、`TaskManager`、`BackgroundManager`。
-- 创建 `ToolRegistry`，然后在其上创建 `ToolRuntime`，再在运行时上创建 `SubAgentRunner`。
+- 创建 `ToolRegistry`，然后在其上创建 `ToolRuntime`。`SubAgentRunner` 是一个独立的异步调度器（仅有并发上限）——它不持有任何服务，而是 fork 传给 `run()` 的父 `Agent`，因此并不包装运行时。
 - 通过 `loadBuiltinTools()` 加载内置工具，只向每个工具传递其所需的服务（包括 `SubAgentRunner` 和可选的 `checkPermission`）。
 - 在注册表中注册返回的 `RegisteredTool[]`。
 - 注册传入 `createAppContext()` 的任何预加载提供者结果，并记录提供者诊断信息。
@@ -34,7 +34,9 @@ Agent 循环不加载提供者。它接收工具定义，并在模型请求工�
 
 ## Agent 循环
 
-`src/loop/loop.ts` 负责协议编排：
+`agentLoop(agent)` 接收单个 `Agent`（身份 + 配置 + 共享服务引用 + 会话 `messages`），并在整个运行期间将其绑定到 `currentAgent`（一个 `AsyncLocalStorage<Agent>`）——这是确立按 Agent 身份的唯一位置，也是让工具能 fork 调用它的那个 Agent（如 `subagent`）的机制。子 Agent 通过 `parent.fork(overrides)` 派生（见 [0008](../decisions/0008-agent-object-model.md)）。
+
+`src/loop/loop.ts` 随后负责协议编排：
 
 1. 发出生命周期 Hook。
 2. 向模型发送消息、系统提示和工具定义。
@@ -64,4 +66,6 @@ Agent 循环不加载提供者。它接收工具定义，并在模型请求工�
 - `ToolRegistry` 是已注册定义、处理器和诊断的运行时唯一真实来源。
 - 提供者结果在应用组装时注册，而非在每次工具调用时。
 - 子 Agent 工具是普通注册的内置工具，而非硬编码的循环分支。
+- `agentLoop` 是 `currentAgent` 的唯一绑定者；按 Agent 身份（`agent.id`，默认 `"lead"`）不在别处确立。
+- 工具必须通过 `currentAgent.getStore()` 访问调用它的 Agent，绝不通过导入 `Agent`（那会形成 `Agent → ToolRuntime → Agent` 循环）。
 

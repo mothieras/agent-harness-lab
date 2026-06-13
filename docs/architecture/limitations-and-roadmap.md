@@ -38,6 +38,13 @@ Coverage favors wiring (`createAppContext`, registry/runtime, hook injection) ov
 
 - **Direction:** add focused unit tests per tool factory as individual tools accrue real logic. The structural contract test (`tests/builtin-tool-ownership.test.ts`) already guards the layout.
 
+### 6. Sub-agents are unobservable mid-run
+
+A forked sub-agent runs **silent**: `Agent.fork` does not inherit the lead's `HookBus` (it's a host-interaction device that belongs to the lead — sharing it leaked the child's tool logs into the lead's output). So while a child runs, `check_subagent` can only report its message count, not its actual progress, and a background sub-agent's work isn't streamed anywhere.
+
+- **Why it matters:** with concurrent sub-agents the user is blind to what each one is doing until it settles.
+- **Direction:** a per-agent output sink — foreground streaming vs. background quiet, plus a way to surface which sub-agents are running — once there's a TUI to render it. Deferred, not abandoned: the `hooks` field on `Agent.fork` is the seam where a child's own sink would attach. See [0008](../decisions/0008-agent-object-model.md).
+
 ## Intentional non-goals (not limitations)
 
 These are deliberate, consistent with the project being a thin, readable harness rather than a framework:

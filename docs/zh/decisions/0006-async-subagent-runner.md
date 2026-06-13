@@ -4,7 +4,7 @@
 
 ## 状态
 
-已接受。在 subagent 执行模型（同步 → 异步）方面取代 [0005](0005-stable-subagent-orchestration.md)。0005 中的 role/name 元数据、teammate 推迟以及 CLI readline 生命周期决策仍然有效。注：下文中的 `src/agent/` 路径后来被 [0007](0007-tool-structure-and-layout-overhaul.md) 迁移到了 `src/tools/subagent/`，设计本身不变。
+已接受。在 subagent 执行模型（同步 → 异步）方面取代 [0005](0005-stable-subagent-orchestration.md)。0005 中的 role/name 元数据、teammate 推迟以及 CLI readline 生命周期决策仍然有效。注：下文中的 `src/agent/` 路径后来被 [0007](0007-tool-structure-and-layout-overhaul.md) 迁移到了 `src/tools/subagent/`，设计本身不变。注：下文描述的身份隔离机制（`agentIdentity.run(subId, …)`）与 `runSubAgent` 封装后来被 `Agent` 对象、`parent.fork()` 和单一的 `currentAgent` ALS 取代——见 [0008](0008-agent-object-model.md)。异步执行模型（runner、宿主自动唤醒、永不 reject、仅 lead 排空、并发上限、无嵌套子代理）保持不变。
 
 ## 背景
 
