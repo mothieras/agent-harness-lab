@@ -3,6 +3,7 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { agentLoop, describeFinalResponse } from "../loop/index.js";
 import { forceCompact } from "../loop/compact.js";
+import { Agent } from "../agent.js";
 import { createAppContext } from "../app/context.js";
 import type { AppContext } from "../app/context.js";
 import { registerRuntimeHooks } from "../hooks/runtimeHooks.js";
@@ -15,9 +16,8 @@ import { logToolResult } from "./toolLog.js";
 
 type LeadTurnOptions = {
 	app: AppContext;
+	agent: Agent;
 	history: Anthropic.Messages.MessageParam[];
-	system: string;
-	checkPermission: CheckPermissionFn;
 };
 
 export function hasPendingAsyncWork(app: AppContext): boolean {
@@ -109,10 +109,18 @@ export async function runCli(): Promise<void> {
 
   const checkPermission = createPermissionChecker(process.cwd(), askUser);
   const app = createAppContext(process.cwd(), { checkPermission });
-  const system = buildSystemPrompt(buildPromptContext(app));
+  const systemPrompt = buildSystemPrompt(buildPromptContext(app));
   registerRuntimeHooks(app);
   app.hooks.register("PostToolUse", (block, output) => {
     logToolResult(block.name, block.input as Record<string, unknown>, output);
+  });
+
+  const leadAgent = new Agent({
+    system: systemPrompt,
+    workspaceRoot: app.workspaceRoot,
+    toolRuntime: app.toolRuntime,
+    hooks: app.hooks,
+    checkPermission,
   });
 
   const history: Anthropic.Messages.MessageParam[] = [];
@@ -132,14 +140,15 @@ export async function runCli(): Promise<void> {
         continue;
       }
       history.push({ role: "user", content: query });
-      await runLeadTurn({ app, history, system, checkPermission });
+      leadAgent.messages.push({ role: "user", content: query });
+      await runLeadTurn({ app, agent: leadAgent, history });
 
       // Auto-wake: if background tasks or subagents are still running, wait for them
       while (hasPendingAsyncWork(app)) {
         const result = await waitForAsyncWork(app);
         if (result === "interrupted") break;
         console.log("[async work completed, resuming]");
-        await runLeadTurn({ app, history, system, checkPermission });
+        await runLeadTurn({ app, agent: leadAgent, history });
       }
     }
   } finally {
@@ -153,16 +162,8 @@ export async function runCli(): Promise<void> {
 }
 
 async function runLeadTurn(options: LeadTurnOptions): Promise<void> {
-	const { app, history, system, checkPermission } = options;
-	const result = await agentIdentity.run("lead", () =>
-		agentLoop(history, app.toolRuntime, {
-			system,
-			workspaceRoot: app.workspaceRoot,
-			checkPermission,
-			hooks: app.hooks,
-			tools: app.toolRegistry.getDefinitions(),
-		}),
-	);
+	const { app, agent, history } = options;
+	const result = await agentIdentity.run("lead", () => agentLoop(agent));
 	console.log(describeFinalResponse(result.content, result.stopReason));
 	printTaskStatus(app);
 	console.log();

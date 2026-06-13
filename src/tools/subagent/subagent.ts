@@ -1,10 +1,9 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import { Agent } from "../../agent.js";
 import {
   agentLoop,
   DEFAULT_SUB_AGENT_MAX_TURNS,
   DEFAULT_SUB_AGENT_TIMEOUT_MS,
 } from "../../loop/loop.js";
-import type { AgentLoopOptions } from "../../loop/loop.js";
 import { describeFinalResponse } from "../../loop/response.js";
 import type { HookBus } from "../../hooks/hookBus.js";
 import type { CheckPermissionFn } from "../../permission/types.js";
@@ -33,32 +32,21 @@ export async function runSubAgent(
   toolRuntime: ToolRuntime,
   options?: SubAgentOptions,
 ): Promise<string> {
-  const messages: Anthropic.Messages.MessageParam[] = [
-    { role: "user", content: prompt },
-  ];
-
-  const loopOptions: AgentLoopOptions = {
+  const subAgent = new Agent({
+    name: options?.name,
+    role: options?.role,
     maxTurns: options?.maxTurns ?? DEFAULT_SUB_AGENT_MAX_TURNS,
     timeoutMs: options?.timeoutMs ?? DEFAULT_SUB_AGENT_TIMEOUT_MS,
     allowedTools: SUB_AGENT_ALLOWED_TOOLS,
-    tools: toolRuntime.getToolDefinitions(),
     system: buildSubAgentSystemPrompt(options),
-  };
-  if (options?.workspaceRoot) {
-    loopOptions.workspaceRoot = options.workspaceRoot;
-  }
-  if (options?.checkPermission) {
-    loopOptions.checkPermission = options.checkPermission;
-  }
-  if (options?.hooks) {
-    loopOptions.hooks = options.hooks;
-  }
-
-  const { content, stopReason } = await agentLoop(
-    messages,
+    workspaceRoot: options?.workspaceRoot,
     toolRuntime,
-    loopOptions,
-  );
+    hooks: options?.hooks,
+    checkPermission: options?.checkPermission,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const { content, stopReason } = await agentLoop(subAgent);
 
   return describeFinalResponse(content, stopReason);
 }

@@ -13,6 +13,7 @@ import {
   retryDelay,
 } from "../src/loop/recovery.js";
 import { agentLoop } from "../src/loop/loop.js";
+import { Agent } from "../src/agent.js";
 import type { ToolDefinition } from "../src/tools/types.js";
 
 function textResponse(
@@ -190,9 +191,8 @@ test("agentLoop resets max_tokens after successful recovery", async () => {
 
   try {
     const result = await agentLoop(
-      [{ role: "user", content: "hello" }],
-      emptyRuntime as never,
-      {
+      new Agent({
+        toolRuntime: emptyRuntime as never,
         hooks: {
           emitEffect() {},
           triggerControl(event: string) {
@@ -201,7 +201,8 @@ test("agentLoop resets max_tokens after successful recovery", async () => {
             return stopHookCalls === 1 ? "continue once" : null;
           },
         } as never,
-      },
+        messages: [{ role: "user", content: "hello" }],
+      }),
     );
 
     assert.equal(result.stopReason, "end_turn");
@@ -229,9 +230,11 @@ test("agentLoop retries transient network errors without consuming turns", async
 
   try {
     const result = await agentLoop(
-      [{ role: "user", content: "hello" }],
-      emptyRuntime as never,
-      { maxTurns: 1 },
+      new Agent({
+        toolRuntime: emptyRuntime as never,
+        maxTurns: 1,
+        messages: [{ role: "user", content: "hello" }],
+      }),
     );
 
     assert.equal(result.stopReason, "end_turn");
@@ -261,8 +264,10 @@ test("agentLoop uses fallback model after three consecutive overloads", async ()
 
   try {
     const result = await agentLoop(
-      [{ role: "user", content: "hello" }],
-      emptyRuntime as never,
+      new Agent({
+        toolRuntime: emptyRuntime as never,
+        messages: [{ role: "user", content: "hello" }],
+      }),
     );
 
     assert.equal(result.stopReason, "end_turn");
@@ -305,9 +310,11 @@ test("agentLoop returns an error result when reactive compaction fails", async (
 
   try {
     const result = await agentLoop(
-      [{ role: "user", content: "hello" }],
-      emptyRuntime as never,
-      { workspaceRoot: workspace },
+      new Agent({
+        toolRuntime: emptyRuntime as never,
+        workspaceRoot: workspace,
+        messages: [{ role: "user", content: "hello" }],
+      }),
     );
 
     assert.equal(result.stopReason, "error");
@@ -338,8 +345,10 @@ test("agentLoop falls back to runtime tool definitions when options omit tools",
 
   try {
     const result = await agentLoop(
-      [{ role: "user", content: "hello" }],
-      runtime as never,
+      new Agent({
+        toolRuntime: runtime as never,
+        messages: [{ role: "user", content: "hello" }],
+      }),
     );
 
     assert.equal(result.stopReason, "end_turn");
@@ -352,15 +361,25 @@ test("agentLoop falls back to runtime tool definitions when options omit tools",
 test("agentLoop rejects unknown allowed tools instead of silently filtering", async () => {
   const fallbackTool = toolDefinition("fallback_tool");
   const runtime = {
-    getToolDefinitions: () => [fallbackTool],
+    getToolDefinitions: (allowedTools?: readonly string[]) => {
+      if (allowedTools) {
+        const missing = allowedTools.filter((n) => n !== "fallback_tool");
+        if (missing.length > 0) throw new Error(`Unknown allowed tool(s): ${missing.join(", ")}`);
+      }
+      return [fallbackTool];
+    },
     invokeTool: async () => "",
   };
 
   await assert.rejects(
     () =>
-      agentLoop([{ role: "user", content: "hello" }], runtime as never, {
-        allowedTools: ["fallback_tool", "missing_tool"],
-      }),
+      agentLoop(
+        new Agent({
+          toolRuntime: runtime as never,
+          allowedTools: ["fallback_tool", "missing_tool"],
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      ),
     /Unknown allowed tool\(s\): missing_tool/,
   );
 });
@@ -398,8 +417,10 @@ test("agentLoop returns thrown tool errors as tool_result content", async () => 
 
   try {
     const result = await agentLoop(
-      [{ role: "user", content: "hello" }],
-      toolRuntime as never,
+      new Agent({
+        toolRuntime: toolRuntime as never,
+        messages: [{ role: "user", content: "hello" }],
+      }),
     );
 
     assert.equal(result.stopReason, "end_turn");
